@@ -11,19 +11,27 @@
 import glob
 import os
 
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+IMG_DIR = os.path.join(SCRIPT_DIR, "img")
+
 
 def grouped(iterable, n):
     return zip(*[iter(iterable)] * n)
 
 
-paths = sorted(glob.glob("*.png"))
+# Glob PNG files in the img subdirectory
+paths = sorted(glob.glob(os.path.join(IMG_DIR, "*.png")))
 
 percent_list = []
 pre_size_list = []
 post_size_list = []
 
 for path_a, path_b in grouped(paths, 2):
-    if "-crunch" in path_a:
+    # Get just the filenames for comparison
+    filename_a = os.path.basename(path_a)
+
+    if "-crunch" in filename_a:
         post_path = path_a
         pre_path = path_b
     else:
@@ -31,7 +39,8 @@ for path_a, path_b in grouped(paths, 2):
         pre_path = path_a
 
     # assert that we are testing the correct pairs of files
-    assert f"{pre_path[:-4]}-crunch.png" == post_path
+    pre_basename = os.path.basename(pre_path)
+    assert f"{pre_basename[:-4]}-crunch.png" == os.path.basename(post_path)
 
     pre_size = os.path.getsize(pre_path)
     post_size = os.path.getsize(post_path)

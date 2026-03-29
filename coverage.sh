@@ -1,4 +1,5 @@
 #!/bin/sh
 
-coverage run --include="src/crunch.py" -m py.test src
+. .venv/bin/activate && \
+coverage run --include="src/crunch.py" -m pytest src && \
 coverage report -m

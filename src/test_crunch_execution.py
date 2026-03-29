@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
-import pytest
 import shutil
+import sys
 from subprocess import CalledProcessError
 
-import src.crunch
+import pytest
 
+import src.crunch
 
 # ///////////////////////////////////////////////////////
 #
@@ -36,7 +36,7 @@ def test_pytest_capsys(capsys):
 def test_crunch_help_shortoption(capsys):
     with pytest.raises(SystemExit):
         src.crunch.main(["-h"])
-        
+
     out, err = capsys.readouterr()
     assert out[0:5] == "\n===="
 
@@ -44,7 +44,7 @@ def test_crunch_help_shortoption(capsys):
 def test_crunch_help_longoption(capsys):
     with pytest.raises(SystemExit):
         src.crunch.main(["--help"])
-        
+
     out, err = capsys.readouterr()
     assert out[0:5] == "\n===="
 
@@ -52,7 +52,7 @@ def test_crunch_help_longoption(capsys):
 def test_crunch_usage(capsys):
     with pytest.raises(SystemExit):
         src.crunch.main(["--usage"])
-    
+
     out, err = capsys.readouterr()
     assert out == "$ crunch [image path 1]...[image path n]\n"
 
@@ -97,7 +97,8 @@ def test_crunch_function_get_pngquant_path_commandline():
     sys.argv = ["crunch.py", "test.png", "test2.png"]
     response = src.crunch.get_pngquant_path()
     assert response == os.path.join(
-        os.path.expanduser("~"), "pngquant", "pngquant")
+        os.path.expanduser("~"), ".local", "bin", "pngquant"
+    )
     sys.argv = preargs
 
 
@@ -114,7 +115,8 @@ def test_crunch_function_get_zopflipng_path_commandline():
     sys.argv = ["crunch.py", "test.png", "test2.png"]
     response = src.crunch.get_zopflipng_path()
     assert response == os.path.join(
-        os.path.expanduser("~"), "zopfli", "zopflipng")
+        os.path.expanduser("~"), ".local", "bin", "zopflipng"
+    )
     sys.argv = preargs
 
 
@@ -243,7 +245,7 @@ def test_crunch_function_optimize_png_unoptimized_file():
 
     # check for optimized file following execution
     assert os.path.exists(testpath) is True
-    
+
     # cleanup optimized file produced by this test
     if os.path.exists(testpath):
         os.remove(testpath)
@@ -257,9 +259,9 @@ def test_crunch_function_optimize_png_preoptimized_file():
         os.remove(testpath)
     src.crunch.optimize_png(startpath)
 
-    # check for optimized file following execution 
+    # check for optimized file following execution
     assert os.path.exists(testpath) is True
-    
+
     # cleanup optimized file produced by this test
     if os.path.exists(testpath):
         os.remove(testpath)
@@ -269,7 +271,7 @@ def test_crunch_function_optimize_png_bad_filetype(capsys):
     with pytest.raises(CalledProcessError):
         startpath = os.path.join("src", "crunch.py")
         src.crunch.optimize_png(startpath)
-    
+
     out, err = capsys.readouterr()
     assert "[ ! ]" in err
 
@@ -324,7 +326,7 @@ def test_crunch_function_main_multi_file():
             os.remove(testpath1)
         if os.path.exists(testpath2):
             os.remove(testpath2)
-        
+
         src.crunch.main([startpath1, startpath2])
 
     # check for optimized file following execution
@@ -403,7 +405,7 @@ def test_crunch_function_main_single_file_with_service_flag():
     # cleanup optimized file produced by this test
     if os.path.exists(testpath):
         os.remove(testpath)
-        
+
     teardown_logging_path()
 
 
@@ -426,7 +428,7 @@ def test_crunch_function_main_single_file_with_spaces_with_service_flag():
     # cleanup optimized file produced by this test
     if os.path.exists(testpath):
         os.remove(testpath)
-        
+
     teardown_logging_path()
 
 
@@ -490,7 +492,7 @@ def test_crunch_function_main_multi_file_with_service_flag():
         os.remove(testpath1)
     if os.path.exists(testpath2):
         os.remove(testpath2)
-    
+
     teardown_logging_path()
 
 
@@ -515,7 +517,7 @@ def test_crunch_log_error():
 
 def test_crunch_log_info():
     setup_logging_path()
-    
+
     logpath = src.crunch.LOGFILE_PATH
     src.crunch.log_info("This is a test info message")
     assert os.path.isfile(logpath)
@@ -577,4 +579,6 @@ def setup_logging_path():
 
 def teardown_logging_path():
     if os.path.isfile(src.crunch.LOGFILE_PATH):
-        shutil.rmtree(os.path.join(os.path.expanduser("~"), ".crunch"))
+        shutil.rmtree(
+            os.path.join(os.path.expanduser("~"), ".local", "state", "crunch")
+        )

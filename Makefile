@@ -1,6 +1,6 @@
 
 benchmark:
-	cd benchmarks && $(MAKE) $@
+	@. .venv/bin/activate && cd benchmarks && $(MAKE) $@
 
 build-dependencies:
 	src/install-dependencies.sh
@@ -18,18 +18,19 @@ build-macos-icns:
 	sips -z 512 512   img/Crunch-icon-3.png --out img/CrunchIcon.iconset/icon_256x256@2x.png
 	cd img && iconutil -c icns CrunchIcon.iconset
 
-build-macos-installer:
+build-macos-installer: ## create fast dmg during development
 	# https://github.com/sindresorhus/create-dmg
 	-rm bin/*.dmg
-	-cd bin && create-dmg Crunch.app
+	-cd bin && npx -y create-dmg --no-code-sign Crunch.app
 	# create checksum file for the installer
 	cd bin && mv Crunch*.dmg Crunch-Installer.dmg
 	cd bin && shasum -a 256 Crunch-Installer.dmg > Crunch-Installer-checksum.txt
+	open bin
 
 clean:
 	rm benchmarks/img/*-crunch.png
 
-dist: 
+dist:
 	./dmg-builder.sh
 
 dist-homebrew:
@@ -69,18 +70,17 @@ test-coverage:
 	./coverage.sh
 
 test-python:
-	tox
-	flake8 src/crunch.py
+	. .venv/bin/activate && tox && flake8 src/crunch.py
 
 test-shell:
-	shellcheck --exclude=2046 src/*.sh
+	. .venv/bin/activate && shellcheck --exclude=2046 src/*.sh
 
 test-valid-png-output:
 	crunch testfiles/*.png
 	pngcheck testfiles/*-crunch.png
 	rm testfiles/*-crunch.png
 
-test: test-python test-shell test-valid-png-output
+test: test-coverage test-python test-shell test-valid-png-output
 
 
 .PHONY: benchmark build-dependencies install-executable install-macos-service uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist

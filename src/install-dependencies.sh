@@ -1,8 +1,11 @@
 #!/bin/sh
 
+set -e
+
 # ==================================================================
-#  install-dependencies.sh
+#  install-dependencies-v3.sh
 #    Install Crunch optimization binary dependencies
+#    Uses pngquant v3 (Cargo-based build)
 #
 #   Copyright 2018 Christopher Simpkins
 #   MIT License
@@ -11,58 +14,49 @@
 # ==================================================================
 
 PNGQUANT_BUILD_DIR="$HOME/pngquant"
-PNGQUANT_EXE="$PNGQUANT_BUILD_DIR/pngquant"
+PNGQUANT_EXE="$HOME/.local/bin/pngquant"
 ZOPFLIPNG_BUILD_DIR="$HOME/zopfli"
-ZOPFLIPNG_EXE="$ZOPFLIPNG_BUILD_DIR/zopflipng"
+ZOPFLIPNG_EXE="$HOME/.local/bin/zopflipng"
+INCLUDE_DIR="$(dirname "$0")/include"
+PNGQUANT_COPY="$INCLUDE_DIR/pngquant"
+ZOPFLIPNG_COPY="$INCLUDE_DIR/zopflipng"
 
-PNGQUANT_VERSION_TAG="2.12.5"
-ZOPFLIPNG_VERSION_TAG="v2.2.0"
-LIBPNG_VERSION="1.6.37"
-LIBPNG_VERSION_FILE="v$LIBPNG_VERSION.tar.gz"
-
-LITTLECMS_VERSION="2.9"
-LITTLECMS_FILE="lcms$LITTLECMS_VERSION.tar.gz"
+# https://github.com/kornelski/pngquant/tags
+PNGQUANT_VERSION_TAG="3.0.3"
+# https://github.com/chrissimpkins/zopfli/tags
+ZOPFLIPNG_VERSION_TAG="v2.3.0"
 
 
 # ////////////////////
 #
-#  BUILD pngquant
+#  BUILD pngquant (v3 using Cargo)
 #
 # ////////////////////
 
-# Clone pngquant source
+# Check for Rust installation (required for pngquant v3)
+if ! command -v rustc > /dev/null 2>&1; then
+    printf "[ERROR]: Rust is required to build pngquant v3.\n"
+    printf "Please install from https://rustup.rs\n"
+    exit 1
+fi
+
+# Clone pngquant source (shallow clone with specific tag)
 if [ -d "$PNGQUANT_BUILD_DIR" ]; then
     rm -rf "$PNGQUANT_BUILD_DIR"
 fi
 
 cd "$HOME" || exit 1
 
-git clone --recursive https://github.com/kornelski/pngquant.git
+git clone --depth=1 --branch=$PNGQUANT_VERSION_TAG --recursive git@github.com:kornelski/pngquant.git "$PNGQUANT_BUILD_DIR"
 cd "$PNGQUANT_BUILD_DIR" || exit 1
-git checkout $PNGQUANT_VERSION_TAG
-git submodule update
+git submodule update --depth=1
 
-# Clone libpng source as a subdirectory of pngquant source (as per pngquant static compilation documentation)
-curl -L -O "https://github.com/glennrp/libpng/archive/refs/tags/$LIBPNG_VERSION_FILE"
-tar -xf $LIBPNG_VERSION_FILE
-rm $LIBPNG_VERSION_FILE
-cd "libpng-$LIBPNG_VERSION" || exit 1
-# build local libpng
-./configure && make
+# Build pngquant using Cargo (dependencies are handled automatically by Cargo)
+# LCMS2_STATIC=1 forces static linking of Little CMS library
+LCMS2_STATIC=1 cargo build --release
 
-# Clone local little-cms2 library source and compile
-cd "$PNGQUANT_BUILD_DIR" || exit 1
-curl -L -O "https://github.com/mm2/Little-CMS/archive/refs/tags/$LITTLECMS_FILE"
-tar -xf $LITTLECMS_FILE
-rm $LITTLECMS_FILE
-
-cd "Little-CMS-lcms$LITTLECMS_VERSION" || exit 1
-./configure && make
-
-# Build local pngquant executable using local libpng
-cd "$PNGQUANT_BUILD_DIR" || exit 1
-LCMS2_STATIC=1 ./configure --with-libpng="libpng-$LIBPNG_VERSION" --with-lcms2 && make
-
+mv target/release/pngquant "$PNGQUANT_EXE"
+cp "$PNGQUANT_EXE" "$PNGQUANT_COPY"
 
 # /////////////////
 #
@@ -70,17 +64,19 @@ LCMS2_STATIC=1 ./configure --with-libpng="libpng-$LIBPNG_VERSION" --with-lcms2 &
 #
 # /////////////////
 
+# Clone zopfli source (shallow clone with specific tag)
 if [ -d "$ZOPFLIPNG_BUILD_DIR" ]; then
     rm -rf "$ZOPFLIPNG_BUILD_DIR"
 fi
 
 cd "$HOME" || exit 1
 
-git clone https://github.com/chrissimpkins/zopfli.git
+git clone --depth=1 --branch="$ZOPFLIPNG_VERSION_TAG" git@github.com:chrissimpkins/zopfli.git
 cd zopfli || exit 1
-git checkout "$ZOPFLIPNG_VERSION_TAG"
 
 make zopflipng
+mv zopflipng "$ZOPFLIPNG_EXE"
+cp "$ZOPFLIPNG_EXE" "$ZOPFLIPNG_COPY"
 
 # ///////////////////////
 #
@@ -90,30 +86,30 @@ make zopflipng
 
 # Test for expected install file paths and report outcome to user
 
-printf "\\n\\n------------------------------\\nTesting Builds...\\n------------------------------\\n"
+printf "\n\n------------------------------\nTesting Builds...\n------------------------------\n"
 
-printf "[?] %s test...\\n\\n" "$PNGQUANT_EXE"
+printf "[?] %s test...\n\n" "$PNGQUANT_EXE"
 if [ -f "$PNGQUANT_EXE" ]; then
-    "$PNGQUANT_EXE" --help
+    "$PNGQUANT_EXE" --version
 else
-    printf "[ERROR]: pngquant executable was not found on the expected path: %s\\n" "$PNGQUANT_EXE"
-    printf "The install attempt did not complete successfully.  Please report this error.\\n"
+    printf "[ERROR]: pngquant executable was not found on the expected path: %s\n" "$PNGQUANT_EXE"
+    printf "The install attempt did not complete successfully.  Please report this error.\n"
     exit 1
 fi
 
-printf "\\n[?] %s test...\\n\\n" "$ZOPFLIPNG_EXE"
+printf "\n[?] %s test...\n\n" "$ZOPFLIPNG_EXE"
 if [ -f "$ZOPFLIPNG_EXE" ]; then
-    "$ZOPFLIPNG_EXE" --help
+    "$ZOPFLIPNG_EXE" --version
 else
-    printf "[ERROR]: zopflipng executable was not found on the expected path: %s\\n" "$PNGQUANT_EXE"
+    printf "[ERROR]: zopflipng executable was not found on the expected path: %s\n" "$PNGQUANT_EXE"
     printf "The install attempt did not complete successfully.  Please report this error."
     exit 1
 fi
 
-printf "\\n\\n------------------------------\\nEnd Tests\\n------------------------------\\n"
+printf "\n\n------------------------------\nEnd Tests\n------------------------------\n"
 
-printf "\\n---------- BUILD PATHS ----------\\n"
-printf "[*] pngquant path: %s\\n" "$PNGQUANT_EXE"
-printf "[*] zopflipng path: %s\\n" "$ZOPFLIPNG_EXE"
-printf "\\n\\n[OK] Dependency installs complete.\\n"
+printf "\n---------- BUILD PATHS ----------\n"
+printf "[*] pngquant path: %s\n" "$PNGQUANT_EXE"
+printf "[*] zopflipng path: %s\n" "$ZOPFLIPNG_EXE"
+printf "\n\n[OK] Dependency installs complete.\n"
 exit 0

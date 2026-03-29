@@ -1,7 +1,8 @@
 
 benchmark:
 	cd img && /usr/bin/time -p crunch *.png
-	cd img && python3 bench.py
+	. ../.venv/bin/activate && python3 bench.py
+	rm img/*-crunch.png
 
 
 .PHONY: benchmark

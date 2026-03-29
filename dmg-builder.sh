@@ -1,10 +1,11 @@
 #!/bin/sh
 
-# This script uses the `create-dmg` script from https://github.com/andreyvit/create-dmg
+set -e
 
+# This script uses the `create-dmg` script from https://github.com/create-dmg/create-dmg
 create-dmg \
 --volname "Crunch Installer" \
---volicon "/Users/chris/Library/Application Support/Platypus/PlatypusIcon-13299.icns" \
+--volicon "img/CrunchIcon.icns" \
 --background "img/dmg-installer-bg.png" \
 --window-pos 200 120 \
 --window-size 800 400 \
@@ -13,9 +14,10 @@ create-dmg \
 --hide-extension Crunch.app \
 --app-drop-link 600 185 \
 Crunch-Installer.dmg \
-/Users/chris/code/Crunch/bin
+./bin
 
 # create checksum file for the installer
+mkdir installer
 mv Crunch-Installer.dmg installer/Crunch-Installer.dmg
 cd installer || exit 1
 shasum Crunch-Installer.dmg > Crunch-Installer-checksum.txt

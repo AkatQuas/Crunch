@@ -4,28 +4,31 @@
 #  crunch
 #    A PNG file optimization tool built on pngquant and zopflipng
 #
+#   Copyright 2026 AkatQuas
+#   MIT License
+#   Source Repository: https://github.com/AkatQuas/Crunch
+#
 #   Copyright 2019 Christopher Simpkins
 #   MIT License
 #
 #   Source Repository: https://github.com/chrissimpkins/Crunch
 # ==================================================================
 
-import sys
 import os
 import shutil
 import struct
 import subprocess
+import sys
 import time
+from multiprocessing import Lock, Pool, cpu_count
 from subprocess import CalledProcessError
 
-from multiprocessing import Lock, Pool, cpu_count
-
-# Locks
-stdstream_lock = Lock()
-logging_lock = Lock()
+# Global lock declarations (initialized via lock_init for worker processes)
+stdstream_lock = None
+logging_lock = None
 
 # Application Constants
-VERSION = "5.0.0"
+VERSION = "6.0.0"
 VERSION_STRING = "crunch v" + VERSION
 
 # Processor Constant
@@ -37,12 +40,14 @@ PROCESSES = 0
 
 # Dependency Path Constants for Command Line Executable
 #  - Redefine these path strings to use system-installed versions of
-#    pngquant and zopflipng (e.g. to "/usr/local/bin/[executable]")
-PNGQUANT_CLI_PATH = os.path.join(os.path.expanduser("~"), "pngquant", "pngquant")
-ZOPFLIPNG_CLI_PATH = os.path.join(os.path.expanduser("~"), "zopfli", "zopflipng")
+#    pngquant and zopflipng (e.g. to "~/.local/bin/[executable]")
+PNGQUANT_CLI_PATH = os.path.join(os.path.expanduser("~"), ".local", "bin", "pngquant")
+ZOPFLIPNG_CLI_PATH = os.path.join(os.path.expanduser("~"), ".local", "bin", "zopflipng")
 
 # Crunch Directory (dot directory in $HOME)
-CRUNCH_DOT_DIRECTORY = os.path.join(os.path.expanduser("~"), ".crunch")
+CRUNCH_DOT_DIRECTORY = os.path.join(
+    os.path.expanduser("~"), ".local", "state", "crunch"
+)
 
 # Log File Path Constants
 LOGFILE_PATH = os.path.join(CRUNCH_DOT_DIRECTORY, "crunch.log")
@@ -50,6 +55,11 @@ LOGFILE_PATH = os.path.join(CRUNCH_DOT_DIRECTORY, "crunch.log")
 HELP_STRING = """
 ==================================================
  crunch
+  Copyright 2026 AkatQuas
+  MIT License
+
+  Source: https://github.com/AkatQuas/Crunch
+
   Copyright 2019 Christopher Simpkins
   MIT License
 
@@ -66,6 +76,7 @@ Options:
     --help, -h      application help
     --usage         application usage
     --version, -v   application version
+    --log, -l       output log content (use -l N to specify number of lines, default: 200)
 """
 
 USAGE = "$ crunch [image path 1]...[image path n]"
@@ -78,9 +89,8 @@ def main(argv):
     if len(argv) > 0 and argv[0] in ("--gui", "--service"):
         if not os.path.isdir(CRUNCH_DOT_DIRECTORY):
             os.makedirs(CRUNCH_DOT_DIRECTORY)
-        # clear the text in the log file before every script execution
-        # logging is only maintained for the last execution of the script
-        open(LOGFILE_PATH, "w").close()
+        # Log entries are appended to the file on every script execution
+        # (see log_error and log_info functions below)
 
     # ////////////////////////
     # ANSI COLOR DEFINITIONS
@@ -113,6 +123,20 @@ def main(argv):
         sys.exit(0)
     elif argv[0] == "--usage":
         print(USAGE)
+        sys.exit(0)
+    elif argv[0] in ("-l", "--log"):
+        # Handle log output with optional line count
+        num_lines = 200  # default
+        if len(argv) > 1:
+            try:
+                num_lines = int(argv[1])
+            except ValueError:
+                sys.stderr.write(
+                    f"{ERROR_STRING} Invalid argument '{argv[1]}' for --log. "
+                    f"Please provide a valid integer for number of lines.{os.linesep}"
+                )
+                sys.exit(1)
+        print_log(num_lines)
         sys.exit(0)
 
     # ////////////////////////
@@ -191,7 +215,15 @@ def main(argv):
     # ////////////////////////////////////
     print("Crunching ...")
 
+    # create locks
+    ss_lock = Lock()
+    log_lock = Lock()
+
     if len(png_path_list) == 1:
+        # the global locks are not necessary for single file processing
+        # but must be instantiated because the logging functions are
+        # used for single and multi-process execution
+        lock_init(ss_lock, log_lock)
         # there is only one PNG file, skip spawning of processes and just optimize it
         optimize_png(png_path_list[0])
     else:
@@ -210,21 +242,32 @@ def main(argv):
             f"Spawning {processes} processes to optimize {len(png_path_list)} "
             f"image files..."
         )
-        p = Pool(processes)
+
+        # create multiprocessing pool with global locks
+        # based on approach described in https://stackoverflow.com/a/25558333/2848172
+        # to address shared memory leak described in
+        # https://github.com/chrissimpkins/Crunch/issues/100
+        p = Pool(processes, initializer=lock_init, initargs=(ss_lock, log_lock))
+
         try:
             p.map(optimize_png, png_path_list)
         except Exception as e:
-            stdstream_lock.acquire()
+            if stdstream_lock:
+                stdstream_lock.release()
             sys.stderr.write(f"-----{os.linesep}")
             sys.stderr.write(
                 f"{ERROR_STRING} Error detected during execution of the request."
                 f"{os.linesep}"
             )
             sys.stderr.write(f"{e}{os.linesep}")
-            stdstream_lock.release()
+            if stdstream_lock:
+                stdstream_lock.release()
             if is_gui(argv):
                 log_error(str(e))
             sys.exit(1)
+        finally:
+            p.close()
+            p.join()
 
     # end of successful processing, exit code 0
     if is_gui(argv):
@@ -273,12 +316,14 @@ def optimize_png(png_path):
             # processing below if it is not present to these errors
             pass
         else:
-            stdstream_lock.acquire()
+            if stdstream_lock:
+                stdstream_lock.acquire()
             sys.stderr.write(
                 f"{ERROR_STRING} {img.pre_filepath} processing failed at the pngquant "
                 f"stage.{os.linesep}"
             )
-            stdstream_lock.release()
+            if stdstream_lock:
+                stdstream_lock.release()
             if is_gui(sys.argv):
                 log_error(
                     f"{img.pre_filepath} processing failed at the pngquant stage."
@@ -321,12 +366,14 @@ def optimize_png(png_path):
     try:
         subprocess.check_output(zopflipng_command, stderr=subprocess.STDOUT, shell=True)
     except CalledProcessError as cpe:
-        stdstream_lock.acquire()
+        if stdstream_lock:
+            stdstream_lock.acquire()
         sys.stderr.write(
             f"{ERROR_STRING} {img.pre_filepath} processing failed at the zopflipng "
             f"stage.{os.linesep}"
         )
-        stdstream_lock.release()
+        if stdstream_lock:
+            stdstream_lock.release()
         if is_gui(sys.argv):
             log_error(
                 f"{img.pre_filepath} processing failed at the zopflipng stage."
@@ -356,7 +403,8 @@ def optimize_png(png_path):
 
     # report percent original file size / post file path / size (bytes) to
     # stdout (command line executable)
-    stdstream_lock.acquire()
+    if stdstream_lock:
+        stdstream_lock.acquire()
     print(
         "[ "
         + percent_string
@@ -366,7 +414,8 @@ def optimize_png(png_path):
         + str(img.post_size)
         + " bytes)"
     )
-    stdstream_lock.release()
+    if stdstream_lock:
+        stdstream_lock.release()
 
     # report percent original file size / post file path / size (bytes) to log file
     # (macOS GUI + right-click service)
@@ -443,25 +492,59 @@ def is_valid_png(filepath):
     return signature == expected_signature
 
 
+def lock_init(ss_lock, log_lock):
+    # Based on approach described in
+    # https://stackoverflow.com/a/25558333/2848172
+    global stdstream_lock
+    global logging_lock
+
+    stdstream_lock = ss_lock
+    logging_lock = log_lock
+
+
 def log_error(errmsg):
     current_time = time.strftime("%m-%d-%y %H:%M:%S")
-    logging_lock.acquire()
+    if logging_lock:
+        logging_lock.acquire()
     with open(LOGFILE_PATH, "a") as filewriter:
         filewriter.write(current_time + "\tERROR\t" + errmsg + os.linesep)
         filewriter.flush()
         os.fsync(filewriter.fileno())
-    logging_lock.release()
+    if logging_lock:
+        logging_lock.release()
 
 
 def log_info(infomsg):
     current_time = time.strftime("%m-%d-%y %H:%M:%S")
-    logging_lock.acquire()
+    if logging_lock:
+        logging_lock.acquire()
     with open(LOGFILE_PATH, "a") as filewriter:
         filewriter.write(current_time + "\tINFO\t" + infomsg + os.linesep)
         filewriter.flush()
         os.fsync(filewriter.fileno())
-    logging_lock.release()
+    if logging_lock:
+        logging_lock.release()
     return None
+
+
+def print_log(num_lines=200):
+    """Output the last N lines of the crunch log file."""
+    if not os.path.isfile(LOGFILE_PATH):
+        print(f"Log file not found: {LOGFILE_PATH}")
+        return
+
+    with open(LOGFILE_PATH, "r") as f:
+        lines = f.readlines()
+
+    if not lines:
+        print("Log file is empty.")
+        return
+
+    # Get the last N lines
+    tail_lines = lines[-num_lines:] if len(lines) > num_lines else lines
+    print(f"--- Last {len(tail_lines)} lines of {LOGFILE_PATH} ---")
+    for line in tail_lines:
+        print(line.rstrip())
 
 
 def shellquote(filepath):

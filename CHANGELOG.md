@@ -1,5 +1,14 @@
 ## Changelog
 
+### v6.0.0
+
+- Upgrade pngquant to v3.0.3 (Cargo-based build)
+- Upgrade zopflipng to v2.3.0
+- Update GitHub Actions workflows to Python 3.12
+- Add ARCHITECTURE.md, CONTRIBUTING.md, PRODUCT.md documentation
+- Refresh macOS app bundle with updated resources
+- Update benchmarks and profile configurations
+
 ### v5.0.0
 
 - Remove command line executable cPython 2 support
@@ -44,7 +53,7 @@
 - improved quality of pngquant quantization of PNG images across all file sizes
 - upgraded embedded pngquant to v2.12.0 (includes reduced pngquant optimization times)
 - converted to custom build of zopflipng that is modified for use in the Crunch applications (forked from google/zopfli at git tag zopfli-1.0.2) at git version tag v2.1.0 (source repository is chrissimpkins/zopfli)
-- improved zopfli compression ratios for post-quantized and non-quantized in-file sizes under 350kB.  Many files are ~33% original file size after they are quantized with pngquant so this affects pre-optimization files up to just over ~1MB in size when the pngquant step is completed (the quantize step yields a modified image binary when it does not lead to larger file size or image quality below Crunch project thresholds, when this does not occur the original file at the original file size is used as the in-file to zopflipng)
+- improved zopfli compression ratios for post-quantized and non-quantized in-file sizes under 350kB. Many files are ~33% original file size after they are quantized with pngquant so this affects pre-optimization files up to just over ~1MB in size when the pngquant step is completed (the quantize step yields a modified image binary when it does not lead to larger file size or image quality below Crunch project thresholds, when this does not occur the original file at the original file size is used as the in-file to zopflipng)
 - improved zopfli compression speed for post-quantized and non-quantized in-file sizes over 750kB
 - eliminate optional PNG chunks by default in all files (reduces file size)
 - converted to use of PNG filter = 0 for zopflipng compression of all quantized files (increases compression speed)
@@ -59,7 +68,7 @@
 ### v2.1.0
 
 - added automated detection of png image types through read of PNG file signatures
-- removed testing for *.png file extension to process files
+- removed testing for \*.png file extension to process files
 - added support for simple modification of pnquant and zopflipng paths that are used for optimization, convert to system PATH installed versions by modification of the Python script (issue #40)
 - bugfix for macOS GUI and right-click menu service failures with absolute file paths that contain multiple directory levels with space characters
 
@@ -73,14 +82,14 @@
 
 ### v2.0.0
 
-- new `crunch` executable that supports parallel PNG image optimization on *nix platforms (including macOS, Linux, and POSIX compliant application environments on Windows such as Cygwin)
+- new `crunch` executable that supports parallel PNG image optimization on \*nix platforms (including macOS, Linux, and POSIX compliant application environments on Windows such as Cygwin)
 - parallel image processing support added to the Crunch macOS GUI application
 - parallel image processing support added to the Crunch Image(s) macOS right-click menu service
 - updated embedded pngquant executable to v2.11.7 (January 2018) with statically compiled library dependencies
 - updated embedded zopflipng executable to git tag `zopfli-1.0.1`
-- convert Crunch macOS GUI files to binary (from XML text files) 
-- new make target and shell script for pngquant dependency source compile support for *nix platforms
-- new make target and shell script for zopflipng dependency source compile support for *nix platforms
+- convert Crunch macOS GUI files to binary (from XML text files)
+- new make target and shell script for pngquant dependency source compile support for \*nix platforms
+- new make target and shell script for zopflipng dependency source compile support for \*nix platforms
 - new make target for pngquant dependency uninstall
 - new make target for zopflipng depdendency uninstall
 - new make target for command line executable install
