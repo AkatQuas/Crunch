@@ -17,7 +17,8 @@ PNGQUANT_BUILD_DIR="$HOME/pngquant"
 PNGQUANT_EXE="$HOME/.local/bin/pngquant"
 ZOPFLIPNG_BUILD_DIR="$HOME/zopfli"
 ZOPFLIPNG_EXE="$HOME/.local/bin/zopflipng"
-INCLUDE_DIR="$(dirname "$0")/include"
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+INCLUDE_DIR="$SCRIPT_DIR/include"
 PNGQUANT_COPY="$INCLUDE_DIR/pngquant"
 ZOPFLIPNG_COPY="$INCLUDE_DIR/zopflipng"
 

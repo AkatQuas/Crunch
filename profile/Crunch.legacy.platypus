@@ -12,28 +12,29 @@
 	<string>AkatQuas</string>
 	<key>BundledFiles</key>
 	<array>
-		<string>/Users/t/fun/Crunch/docs/Credits.html</string>
-		<string>/Users/t/fun/Crunch/html/clear.html</string>
-		<string>/Users/t/fun/Crunch/html/complete-error.html</string>
-		<string>/Users/t/fun/Crunch/html/complete-success.html</string>
-		<string>/Users/t/fun/Crunch/html/execution.html</string>
-		<string>/Users/t/fun/Crunch/html/start.html</string>
-		<string>/Users/t/fun/Crunch/html/waiting.html</string>
-		<string>/Users/t/fun/Crunch/img/animations/01-Load-Up@2x.gif</string>
-		<string>/Users/t/fun/Crunch/img/animations/02-Waiting@2x.gif</string>
-		<string>/Users/t/fun/Crunch/img/animations/03-Crunching@2x.gif</string>
-		<string>/Users/t/fun/Crunch/img/animations/04-Error@2x.gif</string>
-		<string>/Users/t/fun/Crunch/img/animations/04-Success@2x.gif</string>
-		<string>/Users/t/fun/Crunch/src/include/pngquant</string>
-		<string>/Users/t/fun/Crunch/src/include/zopflipng</string>
-		<string>/Users/t/fun/Crunch/src/crunch.py</string>
+		<string>/Users/akat/Crunch/docs/Credits.html</string>
+		<string>/Users/akat/Crunch/html/clear.html</string>
+		<string>/Users/akat/Crunch/html/complete-error.html</string>
+		<string>/Users/akat/Crunch/html/complete-success.html</string>
+		<string>/Users/akat/Crunch/html/execution.html</string>
+		<string>/Users/akat/Crunch/html/start.html</string>
+		<string>/Users/akat/Crunch/html/waiting.html</string>
+		<string>/Users/akat/Crunch/img/animations/01-Load-Up@2x.gif</string>
+		<string>/Users/akat/Crunch/img/animations/02-Waiting@2x.gif</string>
+		<string>/Users/akat/Crunch/img/animations/03-Crunching@2x.gif</string>
+		<string>/Users/akat/Crunch/img/animations/04-Error@2x.gif</string>
+		<string>/Users/akat/Crunch/img/animations/04-Success@2x.gif</string>
+		<string>/Users/akat/Crunch/src/include/pngquant</string>
+		<string>/Users/akat/Crunch/src/include/zopflipng</string>
+		<string>/Users/akat/Crunch/src/crunch.py</string>
+		<string>/Users/akat/Crunch/profile/MainMenu.nib</string>
 	</array>
 	<key>Creator</key>
 	<string>Platypus-5.5.0</string>
 	<key>DeclareService</key>
 	<false/>
 	<key>Destination</key>
-	<string>/Users/t/fun/Desktop/Application.app</string>
+	<string>/Users/akat/Desktop/Application.app</string>
 	<key>DevelopmentVersion</key>
 	<false/>
 	<key>DocIconPath</key>
@@ -43,7 +44,7 @@
 	<key>ExecutablePath</key>
 	<string>/usr/local/share/platypus/ScriptExec</string>
 	<key>IconPath</key>
-	<string>/Users/t/fun/Crunch/img/CrunchIcon.icns</string>
+	<string>/Users/akat/Crunch/img/CrunchIcon.icns</string>
 	<key>Identifier</key>
 	<string>com.akatquas.Crunch</string>
 	<key>InterfaceType</key>
@@ -69,7 +70,7 @@
 	<key>ScriptArgs</key>
 	<array/>
 	<key>ScriptPath</key>
-	<string>/Users/t/fun/Crunch/src/crunch-gui.sh</string>
+	<string>/Users/akat/Crunch/src/crunch-gui.sh</string>
 	<key>SendNotifications</key>
 	<false/>
 	<key>StatusItemDisplayType</key>
@@ -270,6 +271,6 @@
 		<string>public.folder</string>
 	</array>
 	<key>Version</key>
-	<string>6.1.0</string>
+	<string>6.0.0</string>
 </dict>
 </plist>
