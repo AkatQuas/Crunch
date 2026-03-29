@@ -17,7 +17,7 @@ Crunch-Installer.dmg \
 ./bin
 
 # create checksum file for the installer
-mkdir installer
+mkdir -p installer
 mv Crunch-Installer.dmg installer/Crunch-Installer.dmg
 cd installer || exit 1
 shasum Crunch-Installer.dmg > Crunch-Installer-checksum.txt

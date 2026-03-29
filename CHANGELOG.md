@@ -1,5 +1,10 @@
 ## Changelog
 
+### v6.1.0
+
+- Bump version, now Crunch starts to support ARM now.
+- v6.0.0 is the last version that supports x86.
+
 ### v6.0.0
 
 - Upgrade pngquant to v3.0.3 (Cargo-based build)

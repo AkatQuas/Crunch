@@ -28,7 +28,7 @@ stdstream_lock = None
 logging_lock = None
 
 # Application Constants
-VERSION = "6.0.0"
+VERSION = "6.1.0"
 VERSION_STRING = "crunch v" + VERSION
 
 # Processor Constant

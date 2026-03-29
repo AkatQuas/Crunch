@@ -204,9 +204,8 @@ The macOS GUI application is built using **Platypus**, a tool that creates macOS
 **Application Metadata:**
 
 - **Application Name**: Crunch
-- **Bundle Identifier**: `com.akat.Crunch`
+- **Bundle Identifier**: `com.akatquas.Crunch`
 - **Author**: AkatQuas
-- **Version**: 6.0.0
 
 **Build Configuration:**
 
