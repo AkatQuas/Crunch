@@ -7,6 +7,12 @@
 ![Lints](https://github.com/AkatQuas/Crunch/workflows/Lints/badge.svg)
 ![Benchmarks](https://github.com/AkatQuas/Crunch/workflows/Benchmarks/badge.svg)
 
+## Warn
+
+Since [v6.1.0](https://github.com/AkatQuas/Crunch/releases/tag/v6.1.0), only Apple ARM is supported.
+
+For intel x86 Mac, [v6.0.0](https://github.com/AkatQuas/Crunch/releases/tag/v6.0.0) is the last support version.
+
 ## About
 
 Crunch is a tool for lossy PNG image file optimization. It combines selective bit depth, color type, and color palette reduction with zopfli DEFLATE compression algorithm encoding using the pngquant and zopflipng PNG optimization tools. This approach leads to a significant file size gain relative to lossless approaches at the expense of a relatively modest decrease in image quality (see [example images](#examples) below).
