@@ -28,7 +28,7 @@ stdstream_lock = None
 logging_lock = None
 
 # Application Constants
-VERSION = "6.1.0"
+VERSION = "6.2.0"
 VERSION_STRING = "crunch v" + VERSION
 
 # Processor Constant
@@ -37,6 +37,9 @@ VERSION_STRING = "crunch v" + VERSION
 #    automatically defined during source execution when this is defined
 #    as a value of 0
 PROCESSES = 0
+
+# Replace flag - when True, replace original file with optimized version
+REPLACE_ORIGINAL = False
 
 # Dependency Path Constants for Command Line Executable
 #  - Redefine these path strings to use system-installed versions of
@@ -70,16 +73,28 @@ crunch is a command line executable that performs lossy optimization of one
 or more png image files with pngquant and zopflipng.
 
 Usage:
-    $ crunch [image path 1]...[image path n]
+    $ crunch [options] [image path 1]...[image path n]
 
 Options:
     --help, -h      application help
     --usage         application usage
     --version, -v   application version
     --log, -l       output log content (use -l N to specify number of lines, default: 200)
+    --replace, -r   replace original file with optimized version (CLI only)
+
+Notes:
+    - --replace / -r is only available in command line mode
+    - Not supported in --gui or --service modes
+    - Without --replace, a new file with "-crunch" suffix is created
 """
 
-USAGE = "$ crunch [image path 1]...[image path n]"
+USAGE = """$ crunch [options] [image path 1]...[image path n]
+
+Options:
+    -r, --replace   replace original file with optimized version
+    --gui           GUI mode (macOS)
+    --service       service mode (macOS)
+"""
 
 
 def main(argv):
@@ -138,6 +153,19 @@ def main(argv):
                 sys.exit(1)
         print_log(num_lines)
         sys.exit(0)
+
+    # Handle --replace / -r flag (only allowed in non-GUI mode)
+    global REPLACE_ORIGINAL
+    if argv[0] in ("-r", "--replace"):
+        if is_gui(argv):
+            sys.stderr.write(
+                f"{ERROR_STRING} --replace / -r flag is not supported in GUI or Service "
+                f"mode.{os.linesep}"
+            )
+            sys.exit(1)
+        REPLACE_ORIGINAL = True
+        # Remove the flag from the argument list so it doesn't get treated as a file path
+        argv = argv[1:]
 
     # ////////////////////////
     # DEFINE DEPENDENCY PATHS
@@ -223,7 +251,7 @@ def main(argv):
         # the global locks are not necessary for single file processing
         # but must be instantiated because the logging functions are
         # used for single and multi-process execution
-        lock_init(ss_lock, log_lock)
+        lock_init(ss_lock, log_lock, REPLACE_ORIGINAL)
         # there is only one PNG file, skip spawning of processes and just optimize it
         optimize_png(png_path_list[0])
     else:
@@ -247,7 +275,7 @@ def main(argv):
         # based on approach described in https://stackoverflow.com/a/25558333/2848172
         # to address shared memory leak described in
         # https://github.com/chrissimpkins/Crunch/issues/100
-        p = Pool(processes, initializer=lock_init, initargs=(ss_lock, log_lock))
+        p = Pool(processes, initializer=lock_init, initargs=(ss_lock, log_lock, REPLACE_ORIGINAL))
 
         try:
             p.map(optimize_png, png_path_list)
@@ -298,8 +326,13 @@ def optimize_png(png_path):
     # --------------
     # pngquant stage
     # --------------
+    # Use -crunch-temp suffix when REPLACE_ORIGINAL is set, otherwise use -crunch
+    if REPLACE_ORIGINAL:
+        ext_suffix = "-crunch-temp.png"
+    else:
+        ext_suffix = "-crunch.png"
     pngquant_options = (
-        " --quality=80-98 --skip-if-larger --force --strip --speed 1 --ext -crunch.png "
+        f" --quality=80-98 --skip-if-larger --force --strip --speed 1 --ext {ext_suffix} "
     )
     pngquant_command = PNGQUANT_EXE_PATH + pngquant_options + shellquote(img.pre_filepath)
     try:
@@ -395,6 +428,11 @@ def optimize_png(png_path):
     # Check file size post-optimization and report comparison with pre-optimization file
     img.get_post_filesize()
     percent = img.get_compression_percent()
+
+    # Replace original file with optimized version if --replace flag is set
+    if REPLACE_ORIGINAL:
+        img.finalize_replacement()
+
     percent_string = "{0:.2f}%".format(percent)
     # if compression occurred, color the percent string green
     # otherwise, leave it default text color
@@ -492,14 +530,16 @@ def is_valid_png(filepath):
     return signature == expected_signature
 
 
-def lock_init(ss_lock, log_lock):
+def lock_init(ss_lock, log_lock, replace_original=False):
     # Based on approach described in
     # https://stackoverflow.com/a/25558333/2848172
     global stdstream_lock
     global logging_lock
+    global REPLACE_ORIGINAL
 
     stdstream_lock = ss_lock
     logging_lock = log_lock
+    REPLACE_ORIGINAL = replace_original
 
 
 def log_error(errmsg):
@@ -581,8 +621,24 @@ class ImageFile(object):
         return os.path.getsize(file_path)
 
     def _get_post_filepath(self):
-        path, extension = os.path.splitext(self.pre_filepath)
-        return path + "-crunch" + extension
+        if REPLACE_ORIGINAL:
+            # When replace flag is set, use a temp file to avoid overwriting
+            # before optimization is complete
+            path, extension = os.path.splitext(self.pre_filepath)
+            return path + "-crunch-temp" + extension
+        else:
+            path, extension = os.path.splitext(self.pre_filepath)
+            return path + "-crunch" + extension
+
+    def finalize_replacement(self):
+        """Replace original file with optimized version."""
+        if REPLACE_ORIGINAL and os.path.exists(self.post_filepath):
+            # Remove the original file and rename the optimized file to take its place
+            os.remove(self.pre_filepath)
+            os.rename(self.post_filepath, self.pre_filepath)
+            # Update post_size to reflect the replaced file
+            self.post_size = self._get_filesize(self.pre_filepath)
+            self.post_filepath = self.pre_filepath
 
     def get_post_filesize(self):
         self.post_size = self._get_filesize(self.post_filepath)

@@ -54,7 +54,7 @@ def test_crunch_usage(capsys):
         src.crunch.main(["--usage"])
 
     out, err = capsys.readouterr()
-    assert out == "$ crunch [image path 1]...[image path n]\n"
+    assert "$ crunch [options] [image path 1]...[image path n]" in out
 
 
 def test_crunch_version_shortoption(capsys):

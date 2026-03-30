@@ -1,5 +1,11 @@
 ## Changelog
 
+### v6.2.0
+
+- Add `--replace` / `-r` flag to replace original file with optimized version (CLI only)
+- Updated USAGE and HELP documentation
+- Add unit tests for replace flag functionality
+
 ### v6.1.0
 
 - Bump version, now Crunch starts to support ARM now.
@@ -10,7 +16,7 @@
 - Upgrade pngquant to v3.0.3 (Cargo-based build)
 - Upgrade zopflipng to v2.3.0
 - Update GitHub Actions workflows to Python 3.12
-- Add ARCHITECTURE.md, CONTRIBUTING.md, PRODUCT.md documentation
+- Add ARCHITECTURE.md, CONTRIBUTING.md documentation
 - Refresh macOS app bundle with updated resources
 - Update benchmarks and profile configurations
 
