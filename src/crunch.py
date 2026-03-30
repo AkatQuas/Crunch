@@ -275,7 +275,11 @@ def main(argv):
         # based on approach described in https://stackoverflow.com/a/25558333/2848172
         # to address shared memory leak described in
         # https://github.com/chrissimpkins/Crunch/issues/100
-        p = Pool(processes, initializer=lock_init, initargs=(ss_lock, log_lock, REPLACE_ORIGINAL))
+        p = Pool(
+            processes,
+            initializer=lock_init,
+            initargs=(ss_lock, log_lock, REPLACE_ORIGINAL)
+        )
 
         try:
             p.map(optimize_png, png_path_list)
@@ -326,13 +330,8 @@ def optimize_png(png_path):
     # --------------
     # pngquant stage
     # --------------
-    # Use -crunch-temp suffix when REPLACE_ORIGINAL is set, otherwise use -crunch
-    if REPLACE_ORIGINAL:
-        ext_suffix = "-crunch-temp.png"
-    else:
-        ext_suffix = "-crunch.png"
     pngquant_options = (
-        f" --quality=80-98 --skip-if-larger --force --strip --speed 1 --ext {ext_suffix} "
+        " --quality=80-98 --skip-if-larger --force --strip --speed 1 --ext -crunch.png "
     )
     pngquant_command = PNGQUANT_EXE_PATH + pngquant_options + shellquote(img.pre_filepath)
     try:
@@ -621,14 +620,8 @@ class ImageFile(object):
         return os.path.getsize(file_path)
 
     def _get_post_filepath(self):
-        if REPLACE_ORIGINAL:
-            # When replace flag is set, use a temp file to avoid overwriting
-            # before optimization is complete
-            path, extension = os.path.splitext(self.pre_filepath)
-            return path + "-crunch-temp" + extension
-        else:
-            path, extension = os.path.splitext(self.pre_filepath)
-            return path + "-crunch" + extension
+        path, extension = os.path.splitext(self.pre_filepath)
+        return path + "-crunch" + extension
 
     def finalize_replacement(self):
         """Replace original file with optimized version."""

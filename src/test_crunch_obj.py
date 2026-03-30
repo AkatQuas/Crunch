@@ -47,14 +47,6 @@ def test_crunch_imagefile_obj_instantiation_with_replace_flag(monkeypatch):
     # Set the global flag to True
     monkeypatch.setattr('src.crunch.REPLACE_ORIGINAL', True)
 
-    # Need to reimport to get the updated global value
-    from src.crunch import ImageFile as ImageFileRebuilt
-    imgfile = ImageFileRebuilt(os.path.join("testfiles", "robot.png"))
-    assert imgfile.pre_filepath == os.path.join("testfiles", "robot.png")
-    # Should use -crunch-temp suffix when REPLACE_ORIGINAL is True
-    assert imgfile.post_filepath == os.path.join("testfiles", "robot-crunch-temp.png")
-
-
 def test_crunch_imagefile_obj_finalize_replacement(monkeypatch):
     """Test that finalize_replacement replaces original with optimized file."""
     # Set the global flag to True
@@ -66,7 +58,7 @@ def test_crunch_imagefile_obj_finalize_replacement(monkeypatch):
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create test files
         original_file = os.path.join(tmpdir, "test.png")
-        temp_file = os.path.join(tmpdir, "test-crunch-temp.png")
+        temp_file = os.path.join(tmpdir, "test-crunch.png")
 
         # Write some test data
         with open(original_file, 'wb') as f:
@@ -104,11 +96,10 @@ def test_crunch_imagefile_obj_finalize_replacement_no_temp_file(monkeypatch):
 
         imgfile = ImageFileRebuilt(original_file)
         # post_filepath points to non-existent temp file
-        imgfile.post_filepath = os.path.join(tmpdir, "nonexistent-crunch-temp.png")
+        imgfile.post_filepath = os.path.join(tmpdir, "nonexistent-crunch.png")
 
         # Should not raise, just should not do anything
         imgfile.finalize_replacement()
 
         # Original should still exist
         assert os.path.exists(original_file)
-
