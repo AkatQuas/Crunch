@@ -35,6 +35,8 @@ The `crunch` command line executable can be installed with `make` or manually. P
 
 Enter paths to your PNG image files as arguments to the `crunch` executable. Please see the [Usage documentation](docs/EXECUTABLE.md#usage).
 
+The `--replace` / `-r` flag is available to replace the original file with the optimized version (CLI only).
+
 ## Crunch macOS GUI Application
 
 The Crunch native macOS GUI application can be installed with Homebrew or the dmg installer that can be downloaded from the [repository releases](https://github.com/AkatQuas/Crunch/releases/latest). Please see the [Install documentation](docs/MACOSGUI.md#install).

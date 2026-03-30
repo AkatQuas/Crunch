@@ -94,7 +94,7 @@ The Crunch macOS GUI application is created using **Platypus**, a macOS app wrap
 
 **Platypus Configuration:**
 
-- **Bundle Identifier**: `com.csimpkins.Crunch`
+- **Bundle Identifier**: `com.akatquas.Crunch`
 - **Interface Type**: Web View (HTML-based UI)
 - **Script Path**: `src/crunch-gui.sh` (executed via `/bin/sh`)
 - **Icon**: `img/CrunchIcon.icns`
@@ -162,11 +162,11 @@ The `Crunch.platypus` profile file is the configuration source that defines this
 
 The application detects execution context to resolve dependency paths:
 
-| Context | pngquant Path                                          | zopflipng Path                |
-| ------- | ------------------------------------------------------ | ----------------------------- |
-| CLI     | `~/.local/bin/pngquant`                                | `~/.local/bin/zopflipng`      |
-| GUI     | `./pngquant` (relative)                                | `./zopflipng` (relative)      |
-| Service | `/Applications/Crunch.app/Contents/Resources/pngquant` | Full path to app bundle       |
+| Context | pngquant Path                                          | zopflipng Path           |
+| ------- | ------------------------------------------------------ | ------------------------ |
+| CLI     | `~/.local/bin/pngquant`                                | `~/.local/bin/zopflipng` |
+| GUI     | `./pngquant` (relative)                                | `./zopflipng` (relative) |
+| Service | `/Applications/Crunch.app/Contents/Resources/pngquant` | Full path to app bundle  |
 
 ## Quality Assurance
 

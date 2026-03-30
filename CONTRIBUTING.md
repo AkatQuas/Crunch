@@ -18,15 +18,15 @@ Contributions are warmly welcomed! This guide outlines how to set up your develo
 1. **Clone the repository**:
 
    ```bash
-   $ git clone https://github.com/chrissimpkins/Crunch.git
+   $ git clone https://github.com/AkatQuas/Crunch.git
    $ cd Crunch
    ```
 
 2. **Create a Python virtual environment** (recommended):
 
    ```bash
-   $ python3 -m venv venv
-   $ source venv/bin/activate
+   $ python3 -m venv .venv
+   $ source .venv/bin/activate
    ```
 
 3. **Install Python testing dependencies**:
@@ -139,7 +139,7 @@ $ make benchmark
 
 ## Issue Reporting
 
-Use the [GitHub issue tracker](https://github.com/chrissimpkins/Crunch/issues/new/choose) to report bugs or request features. For bugs, include:
+Use the [GitHub issue tracker](https://github.com/AkatQuas/Crunch/issues/new/choose) to report bugs or request features. For bugs, include:
 
 - Operating system and version
 - Crunch version (`crunch --version`)
@@ -150,7 +150,6 @@ Use the [GitHub issue tracker](https://github.com/chrissimpkins/Crunch/issues/ne
 ## Documentation
 
 - Update `ARCHITECTURE.md` for structural changes
-- Update `PRODUCT.md` for feature changes
 - Update `docs/*.md` for user-facing documentation
 
 ## License

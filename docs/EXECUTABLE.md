@@ -114,7 +114,20 @@ The following options are available for use with the `crunch` executable:
     --help, -h      application help
     --usage         application usage
     --version, -v   application version
+    --log, -l       output log content (use -l N to specify number of lines, default: 200)
+    --replace, -r   replace original file with optimized version (CLI only)
 ```
+
+#### --replace / -r
+
+The `--replace` (or `-r`) flag replaces the original image file with the optimized version. By default, `crunch` creates a new file with `-crunch` suffix. With this flag, the original file is replaced directly.
+
+**Example:**
+```
+$ crunch -r image.png
+```
+
+**Note:** This flag is only available in command line mode. It is not supported in GUI or Service modes.
 
 ## Uninstall `crunch` and Dependencies
 
