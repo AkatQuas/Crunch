@@ -1,6 +1,6 @@
 
 benchmark:
-	@. .venv/bin/activate && cd benchmarks && $(MAKE) $@
+	cd benchmarks && $(MAKE) $@
 
 build-dependencies:
 	src/install-dependencies.sh
@@ -70,7 +70,7 @@ test-coverage:
 	./coverage.sh
 
 test-python:
-	. .venv/bin/activate && tox && flake8 src/crunch.py
+	. .venv/bin/activate && tox && black --check src/crunch.py
 
 test-shell:
 	. .venv/bin/activate && shellcheck --exclude=2046 src/*.sh

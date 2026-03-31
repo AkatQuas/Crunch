@@ -225,7 +225,9 @@ def main(argv):
             f"'{PNGQUANT_EXE_PATH}'{os.linesep}"
         )
         if is_gui(argv):
-            log_error(f"pngquant was not found on the expected path {PNGQUANT_EXE_PATH}")
+            log_error(
+                f"pngquant was not found on the expected path {PNGQUANT_EXE_PATH}"
+            )
         sys.exit(1)
     elif not os.path.exists(ZOPFLIPNG_EXE_PATH):
         sys.stderr.write(
@@ -278,7 +280,7 @@ def main(argv):
         p = Pool(
             processes,
             initializer=lock_init,
-            initargs=(ss_lock, log_lock, REPLACE_ORIGINAL)
+            initargs=(ss_lock, log_lock, REPLACE_ORIGINAL),
         )
 
         try:
@@ -330,10 +332,10 @@ def optimize_png(png_path):
     # --------------
     # pngquant stage
     # --------------
-    pngquant_options = (
-        " --quality=80-98 --skip-if-larger --force --strip --speed 1 --ext -crunch.png "
+    pngquant_options = f" --quality=80-98 --skip-if-larger --force --strip --speed 1 --ext {img.post_suffix} "
+    pngquant_command = (
+        PNGQUANT_EXE_PATH + pngquant_options + shellquote(img.pre_filepath)
     )
-    pngquant_command = PNGQUANT_EXE_PATH + pngquant_options + shellquote(img.pre_filepath)
     try:
         subprocess.check_output(pngquant_command, stderr=subprocess.STDOUT, shell=True)
     except CalledProcessError as cpe:
@@ -613,11 +615,16 @@ class ImageFile(object):
     def __init__(self, filepath):
         self.pre_filepath = filepath
         self.post_filepath = self._get_post_filepath()
+        self.post_suffix = self._get_post_suffix()
         self.pre_size = self._get_filesize(self.pre_filepath)
         self.post_size = 0
 
     def _get_filesize(self, file_path):
         return os.path.getsize(file_path)
+
+    def _get_post_suffix(self):
+        _, extension = os.path.splitext(self.pre_filepath)
+        return "-crunch" + extension
 
     def _get_post_filepath(self):
         path, extension = os.path.splitext(self.pre_filepath)

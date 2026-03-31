@@ -1,7 +1,7 @@
 
 benchmark:
 	cd img && /usr/bin/time -p crunch *.png
-	. ../.venv/bin/activate && python3 bench.py
+	python3 bench.py
 	rm img/*-crunch.png
 
 

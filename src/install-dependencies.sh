@@ -33,6 +33,7 @@ ZOPFLIPNG_VERSION_TAG="v2.3.0"
 #  BUILD pngquant (v3 using Cargo)
 #
 # ////////////////////
+mkdir -p "$HOME/.local/bin"
 
 # Check for Rust installation (required for pngquant v3)
 if ! command -v rustc > /dev/null 2>&1; then
@@ -47,8 +48,7 @@ if [ -d "$PNGQUANT_BUILD_DIR" ]; then
 fi
 
 cd "$HOME" || exit 1
-
-git clone --depth=1 --branch=$PNGQUANT_VERSION_TAG --recursive git@github.com:kornelski/pngquant.git "$PNGQUANT_BUILD_DIR"
+git clone --depth=1 --branch=$PNGQUANT_VERSION_TAG --recursive https://github.com/kornelski/pngquant.git "$PNGQUANT_BUILD_DIR"
 cd "$PNGQUANT_BUILD_DIR" || exit 1
 git submodule update --depth=1
 
@@ -72,7 +72,7 @@ fi
 
 cd "$HOME" || exit 1
 
-git clone --depth=1 --branch="$ZOPFLIPNG_VERSION_TAG" git@github.com:chrissimpkins/zopfli.git
+git clone --depth=1 --branch="$ZOPFLIPNG_VERSION_TAG" https://github.com/chrissimpkins/zopfli.git
 cd zopfli || exit 1
 
 make zopflipng

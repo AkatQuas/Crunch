@@ -10,7 +10,7 @@ Contributions are warmly welcomed! This guide outlines how to set up your develo
 - **Python**: 3.x (Python 2 support removed in v5.0.0)
 - **Rust**: 1.63+ (for pngquant v3, see https://rustup.rs)
 - **Build Tools**: make, git, standard C/C++ compiler (for zopfli)
-- **Testing**: tox, flake8, shellcheck-py (installed via pip), pngcheck (installed via Homebrew)
+- **Testing**: tox, black, shellcheck-py (installed via pip), pngcheck (installed via Homebrew)
 - **Platypus** (for macOS GUI app development): https://sveinbjorn.org/platypus
 
 ### Development Setup
@@ -108,7 +108,7 @@ $ make test
 Individual test targets:
 
 ```bash
-$ make test-python        # Python unit tests + flake8
+$ make test-python        # Python unit tests + black
 $ make test-shell         # shellcheck validation
 $ make test-valid-png-output  # Verify PNG output validity
 ```

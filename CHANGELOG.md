@@ -1,5 +1,9 @@
 ## Changelog
 
+### v6.3.0
+
+- Migrate from flake8 to black
+
 ### v6.2.0
 
 - Add `--replace` / `-r` flag to replace original file with optimized version (CLI only)
