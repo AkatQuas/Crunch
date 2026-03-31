@@ -172,6 +172,6 @@ The application detects execution context to resolve dependency paths:
 
 - **Continuous Integration** - GitHub Actions for Linux and macOS
 - **Testing** - Python unit tests with error and execution scenarios (via tox)
-- **Linting** - flake8 for Python, shellcheck for shell scripts
+- **Linting** - black for Python, shellcheck for shell scripts
 - **Validation** - pngcheck for PNG output validation
 - **Benchmarking** - Automated comparison against reference images using DSSIM
