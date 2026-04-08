@@ -37,6 +37,12 @@ Enter paths to your PNG image files as arguments to the `crunch` executable. Ple
 
 The `--replace` / `-r` flag is available to replace the original file with the optimized version (CLI only).
 
+### Interrupting Crunch
+
+You can interrupt a running Crunch process at any time by pressing `Ctrl+C` (or sending `SIGINT`). Crunch will gracefully terminate all child processes (pngquant, zopflipng) and the multiprocessing pool, ensuring no orphaned processes are left running.
+
+For `SIGTERM`, Crunch also responds with a clean shutdown.
+
 ## Crunch macOS GUI Application
 
 The Crunch native macOS GUI application can be installed with Homebrew or the dmg installer that can be downloaded from the [repository releases](https://github.com/AkatQuas/Crunch/releases/latest). Please see the [Install documentation](docs/MACOSGUI.md#install).

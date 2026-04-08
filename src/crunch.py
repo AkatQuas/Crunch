@@ -16,6 +16,7 @@
 
 import os
 import shutil
+import signal
 import struct
 import subprocess
 import sys
@@ -26,6 +27,9 @@ from subprocess import CalledProcessError
 # Global lock declarations (initialized via lock_init for worker processes)
 stdstream_lock = None
 logging_lock = None
+
+# Global pool reference for signal handling
+pool = None
 
 # Application Constants
 VERSION = "6.2.0"
@@ -97,7 +101,52 @@ Options:
 """
 
 
+def signal_handler(signum, frame):
+    """Handle SIGINT (Ctrl+C) to terminate all child processes."""
+    # Ignore this signal to prevent recursion when we send SIGTERM to our process group
+    signal.signal(signum, signal.SIG_IGN)
+
+    # Write to stderr directly to avoid any I/O issues
+    import sys
+
+    sys.stderr.write("\nReceived interrupt signal. Terminating all processes...\n")
+    sys.stderr.flush()
+
+    # Terminate the multiprocessing pool if it exists
+    global pool
+    if pool is not None:
+        try:
+            pool.terminate()
+            pool.join()
+        except Exception:
+            pass
+
+    # Also kill any remaining child processes in our process group
+    # This catches stray pngquant/zopflipng processes that may have
+    # not been properly cleaned up by the pool
+    try:
+        # Get our process group
+        my_pid = os.getpid()
+        pgid = os.getpgid(my_pid)
+        # Only kill if we're the process group leader (to avoid killing parent)
+        if pgid == my_pid:
+            os.killpg(pgid, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        # Process group may not exist or we may not have permission
+        pass
+
+    # Use os._exit() instead of sys.exit() to avoid any cleanup that might
+    # trigger more signals. This is the proper way to exit from a signal handler.
+    # Exit code = 128 + signal number (standard Unix convention)
+    exit_code = 128 + signum
+    os._exit(exit_code)
+
+
 def main(argv):
+
+    # Register signal handlers for graceful shutdown on Ctrl+C
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     # Create the Crunch dot directory in $HOME if it does not exist
     # Only used for macOS GUI and macOS right-click menu service execution
@@ -277,14 +326,15 @@ def main(argv):
         # based on approach described in https://stackoverflow.com/a/25558333/2848172
         # to address shared memory leak described in
         # https://github.com/chrissimpkins/Crunch/issues/100
-        p = Pool(
+        global pool
+        pool = Pool(
             processes,
             initializer=lock_init,
             initargs=(ss_lock, log_lock, REPLACE_ORIGINAL),
         )
 
         try:
-            p.map(optimize_png, png_path_list)
+            pool.map(optimize_png, png_path_list)
         except Exception as e:
             if stdstream_lock:
                 stdstream_lock.release()
@@ -300,8 +350,9 @@ def main(argv):
                 log_error(str(e))
             sys.exit(1)
         finally:
-            p.close()
-            p.join()
+            pool.close()
+            pool.join()
+            pool = None
 
     # end of successful processing, exit code 0
     if is_gui(argv):
@@ -337,7 +388,7 @@ def optimize_png(png_path):
         PNGQUANT_EXE_PATH + pngquant_options + shellquote(img.pre_filepath)
     )
     try:
-        subprocess.check_output(pngquant_command, stderr=subprocess.STDOUT, shell=True)
+        run_subprocess(pngquant_command)
     except CalledProcessError as cpe:
         if cpe.returncode == 98:
             # this is the status code when file size increases with execution of pngquant.
@@ -398,7 +449,7 @@ def optimize_png(png_path):
         + shellquote(img.post_filepath)
     )
     try:
-        subprocess.check_output(zopflipng_command, stderr=subprocess.STDOUT, shell=True)
+        run_subprocess(zopflipng_command)
     except CalledProcessError as cpe:
         if stdstream_lock:
             stdstream_lock.acquire()
@@ -473,6 +524,26 @@ def optimize_png(png_path):
 # -----------
 # Utilities
 # -----------
+
+
+def run_subprocess(command):
+    """Run a subprocess command in a new process group.
+
+    Uses start_new_session=True so child processes are in their own
+    process group and can be terminated together with the parent.
+    """
+    process = subprocess.Popen(
+        command,
+        stderr=subprocess.STDOUT,
+        shell=True,
+        start_new_session=True,
+    )
+    returncode = process.wait()
+
+    if returncode != 0:
+        raise CalledProcessError(returncode, command)
+
+    return None
 
 
 def fix_filepath_args(args):
