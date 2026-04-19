@@ -531,9 +531,12 @@ def run_subprocess(command):
 
     Uses start_new_session=True so child processes are in their own
     process group and can be terminated together with the parent.
+    Output is suppressed by redirecting DEVNULL.
     """
     process = subprocess.Popen(
         command,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
         shell=True,
         start_new_session=True,

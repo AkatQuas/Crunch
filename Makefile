@@ -40,7 +40,7 @@ install-executable:
 	sudo cp src/crunch.py /usr/local/bin/crunch
 	@echo " "
 	@echo "[*] crunch executable installed on path /usr/local/bin/crunch"
-	@echo "[*] Usage: $ crunch [image path 1]...[image path n]"
+	@echo "[*] Usage: $ crunch [options] [image path 1]...[image path n]"
 
 install-macos-service:
 	- sudo rm -rf ~/Library/Services/Crunch\ Image\(s\).workflow
