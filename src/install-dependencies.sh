@@ -13,9 +13,9 @@ set -e
 #   Source Repository: https://github.com/chrissimpkins/Crunch
 # ==================================================================
 
-PNGQUANT_BUILD_DIR="$HOME/pngquant"
+PNGQUANT_BUILD_DIR="/tmp/pngquant"
 PNGQUANT_EXE="$HOME/.local/bin/pngquant"
-ZOPFLIPNG_BUILD_DIR="$HOME/zopfli"
+ZOPFLIPNG_BUILD_DIR="/tmp/zopfli"
 ZOPFLIPNG_EXE="$HOME/.local/bin/zopflipng"
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 INCLUDE_DIR="$SCRIPT_DIR/include"

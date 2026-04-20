@@ -1,7 +1,4 @@
-
-benchmark:
-	cd benchmarks && $(MAKE) $@
-
+# Build targets
 build-dependencies:
 	src/install-dependencies.sh
 
@@ -27,15 +24,7 @@ build-macos-installer: ## create fast dmg during development
 	cd bin && shasum -a 256 Crunch-Installer.dmg > Crunch-Installer-checksum.txt
 	open bin
 
-clean:
-	rm benchmarks/img/*-crunch.png
-
-dist:
-	./dmg-builder.sh
-
-dist-homebrew:
-	cask-repair crunch
-
+# Install targets
 install-executable:
 	sudo cp src/crunch.py /usr/local/bin/crunch
 	@echo " "
@@ -50,12 +39,6 @@ install-macos-service:
 	@echo " "
 	@echo "[*] You can use the Crunch service by right clicking on one or more PNG files, then select Services > Crunch Image(s)"
 
-uninstall-dependencies:
-	sudo rm -rf ~/pngquant
-	sudo rm -rf ~/zopfli
-	@echo " "
-	@echo "[*] Dependency removal complete."
-
 uninstall-executable:
 	sudo rm /usr/local/bin/crunch
 	@echo " "
@@ -66,6 +49,7 @@ uninstall-macos-service:
 	@echo " "
 	@echo "[*] The Crunch Image(s) macOS service was removed from your system"
 
+# Test targets
 test-coverage:
 	./coverage.sh
 
@@ -82,5 +66,18 @@ test-valid-png-output:
 
 test: test-coverage test-python test-shell test-valid-png-output
 
+# Utility targets
+clean:
+	rm benchmarks/img/*-crunch.png
 
-.PHONY: benchmark build-dependencies install-executable install-macos-service uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist
+benchmark:
+	cd benchmarks && $(MAKE) $@
+
+dist:
+	./dmg-builder.sh
+
+dist-homebrew:
+	cask-repair crunch
+
+
+.PHONY: benchmark build-dependencies build-macos-icns build-macos-installer install-executable install-macos-service uninstall-dependencies uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist dist-homebrew clean
