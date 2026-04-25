@@ -13,6 +13,8 @@ build-macos-icns:
 	sips -z 256 256   img/Crunch-icon-3.png --out img/CrunchIcon.iconset/icon_128x128@2x.png
 	sips -z 256 256   img/Crunch-icon-3.png --out img/CrunchIcon.iconset/icon_256x256.png
 	sips -z 512 512   img/Crunch-icon-3.png --out img/CrunchIcon.iconset/icon_256x256@2x.png
+	sips -z 512 512   img/Crunch-icon-3.png --out img/CrunchIcon.iconset/icon_512x512.png
+	sips -z 1024 1024   img/Crunch-icon-3.png --out img/CrunchIcon.iconset/icon_512x512@2x.png
 	cd img && iconutil -c icns CrunchIcon.iconset
 
 build-macos-installer: ## create fast dmg during development

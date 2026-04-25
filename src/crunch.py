@@ -235,37 +235,39 @@ def main(argv):
     # COMMAND LINE ERROR HANDLING
     # //////////////////////////////////
 
-    NOTPNG_ERROR_FOUND = False
+    # Filter out invalid paths and continue with valid ones
+    valid_png_paths = []
     for png_path in png_path_list:
         # Not a file test
         if not os.path.isfile(png_path):  # is not an existing file
             sys.stderr.write(
                 f"{ERROR_STRING} '{png_path}' does not appear to be a "
-                f"valid path to a PNG file{os.linesep}"
+                f"valid path to a PNG file. Skipping...{os.linesep}"
             )
-            sys.exit(1)  # not a file, abort immediately
+            continue
         # PNG validity test
         if not is_valid_png(png_path):
             sys.stderr.write(
-                f"{ERROR_STRING} '{png_path}' is not a valid PNG file.{os.linesep}"
+                f"{ERROR_STRING} '{png_path}' is not a valid PNG file. Skipping...{os.linesep}"
             )
             if is_gui(argv):
-                log_error(f"{png_path} is not a valid PNG file.")
-            NOTPNG_ERROR_FOUND = True
+                log_error(f"{png_path} is not a valid PNG file. Skipping...")
+            continue
+        # File is valid, add to our list
+        valid_png_paths.append(png_path)
 
-    # Exit after checking all file requests and reporting on all invalid
-    # file paths (above)
-    if NOTPNG_ERROR_FOUND is True:
+    # If no valid files remain, exit
+    if not valid_png_paths:
         sys.stderr.write(
-            f"The request was not executed successfully. Please try again "
+            f"No valid PNG files found. Please try again "
             f"with one or more valid PNG files.{os.linesep}"
         )
         if is_gui(argv):
-            log_error(
-                "The request was not executed successfully. Please try "
-                "again with one or more valid PNG files."
-            )
+            log_error("No valid PNG files found.")
         sys.exit(1)
+
+    # Use the filtered list of valid paths
+    png_path_list = valid_png_paths
 
     # Dependency error handling
     if not os.path.exists(PNGQUANT_EXE_PATH):
