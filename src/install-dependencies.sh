@@ -10,30 +10,27 @@ set -e
 #   Copyright 2018 Christopher Simpkins
 #   MIT License
 #
-#   Source Repository: https://github.com/chrissimpkins/Crunch
+#   Source Repository: https://github.com/AkatQuas/Crunch
 # ==================================================================
 
 PNGQUANT_BUILD_DIR="/tmp/pngquant"
 PNGQUANT_EXE="$HOME/.local/bin/pngquant"
 ZOPFLIPNG_BUILD_DIR="/tmp/zopfli"
 ZOPFLIPNG_EXE="$HOME/.local/bin/zopflipng"
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-INCLUDE_DIR="$SCRIPT_DIR/include"
-PNGQUANT_COPY="$INCLUDE_DIR/pngquant"
-ZOPFLIPNG_COPY="$INCLUDE_DIR/zopflipng"
+# SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # https://github.com/kornelski/pngquant/tags
 PNGQUANT_VERSION_TAG="3.0.3"
 # https://github.com/chrissimpkins/zopfli/tags
 ZOPFLIPNG_VERSION_TAG="v2.3.0"
 
+mkdir -p "$HOME/.local/bin"
 
 # ////////////////////
 #
 #  BUILD pngquant (v3 using Cargo)
 #
 # ////////////////////
-mkdir -p "$HOME/.local/bin"
 
 # Check for Rust installation (required for pngquant v3)
 if ! command -v rustc > /dev/null 2>&1; then
@@ -47,7 +44,6 @@ if [ -d "$PNGQUANT_BUILD_DIR" ]; then
     rm -rf "$PNGQUANT_BUILD_DIR"
 fi
 
-cd "$HOME" || exit 1
 git clone --depth=1 --branch=$PNGQUANT_VERSION_TAG --recursive https://github.com/kornelski/pngquant.git "$PNGQUANT_BUILD_DIR"
 cd "$PNGQUANT_BUILD_DIR" || exit 1
 git submodule update --depth=1
@@ -57,7 +53,6 @@ git submodule update --depth=1
 LCMS2_STATIC=1 cargo build --release
 
 mv target/release/pngquant "$PNGQUANT_EXE"
-cp "$PNGQUANT_EXE" "$PNGQUANT_COPY"
 
 # /////////////////
 #
@@ -70,14 +65,11 @@ if [ -d "$ZOPFLIPNG_BUILD_DIR" ]; then
     rm -rf "$ZOPFLIPNG_BUILD_DIR"
 fi
 
-cd "$HOME" || exit 1
-
-git clone --depth=1 --branch="$ZOPFLIPNG_VERSION_TAG" https://github.com/chrissimpkins/zopfli.git
-cd zopfli || exit 1
+git clone --depth=1 --branch="$ZOPFLIPNG_VERSION_TAG" https://github.com/chrissimpkins/zopfli.git "$ZOPFLIPNG_BUILD_DIR"
+cd "$ZOPFLIPNG_BUILD_DIR" || exit 1
 
 make zopflipng
 mv zopflipng "$ZOPFLIPNG_EXE"
-cp "$ZOPFLIPNG_EXE" "$ZOPFLIPNG_COPY"
 
 # ///////////////////////
 #
