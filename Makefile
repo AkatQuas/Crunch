@@ -1,6 +1,8 @@
 # Build targets
 build-dependencies:
 	src/install-dependencies.sh
+	cp ~/.local/bin/pngquant ./src/include
+	cp ~/.local/bin/zopflipng ./src/include
 
 build-macos-icns:
 	rm -rf img/CrunchIcon.iconset
