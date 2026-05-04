@@ -11,7 +11,7 @@ platformdirs==4.9.4
 pluggy==1.6.0
 Pygments==2.19.2
 pyproject-api==1.10.0
-pytest==9.0.2
+pytest==9.0.3
 python-discovery==1.2.1
 shellcheck_py==0.11.0.1
 tomli_w==1.2.0
