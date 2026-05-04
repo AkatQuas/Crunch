@@ -33,19 +33,19 @@ def test_pytest_capsys(capsys):
 
 
 def test_crunch_missing_argument_error(capsys):
+    # Empty argv falls back to ["-h"], which shows help and exits with code 0
     with pytest.raises(SystemExit) as exit_info:
         src.crunch.main([])
-    
+
     out, err = capsys.readouterr()
-    assert len(err) > 0
-    assert err.startswith("[ ! ]") is True
-    assert exit_info.value.code == 1
+    assert "crunch is a command line executable" in out
+    assert exit_info.value.code == 0
 
 
 def test_crunch_missing_file_error(capsys):
     with pytest.raises(SystemExit) as exit_info:
         src.crunch.main(["bogusfile.png"])
-    
+
     out, err = capsys.readouterr()
     assert len(err) > 0
     assert err.startswith("[ ! ]") is True
@@ -55,7 +55,7 @@ def test_crunch_missing_file_error(capsys):
 def test_crunch_bad_filepath_error(capsys):
     with pytest.raises(SystemExit) as exit_info:
         src.crunch.main(["src/test_crunch_errors.py"])
-    
+
     out, err = capsys.readouterr()
     assert len(err) > 0
     assert err.startswith("[ ! ]") is True
@@ -79,7 +79,7 @@ def test_crunch_missing_pngquant_error(capsys, monkeypatch):
     out, err = capsys.readouterr()
     assert err.startswith("[ ! ]") is True
     assert exit_info.value.code == 1
-    
+
 
 def test_crunch_missing_zopflipng_error(capsys, monkeypatch):
     def return_bogus_path():

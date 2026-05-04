@@ -51,26 +51,26 @@ REPLACE_ORIGINAL = False
 PNGQUANT_CLI_PATH = os.path.join(os.path.expanduser("~"), ".local", "bin", "pngquant")
 ZOPFLIPNG_CLI_PATH = os.path.join(os.path.expanduser("~"), ".local", "bin", "zopflipng")
 
-# Crunch Directory (dot directory in $HOME)
+# Crunch Directory
 CRUNCH_DOT_DIRECTORY = os.path.join(
     os.path.expanduser("~"), ".local", "state", "crunch"
 )
 
-# Log File Path Constants
+# Log File Path
 LOGFILE_PATH = os.path.join(CRUNCH_DOT_DIRECTORY, "crunch.log")
 
 HELP_STRING = """
 ==================================================
- crunch
-  Copyright 2026 AkatQuas
-  MIT License
-
-  Source: https://github.com/AkatQuas/Crunch
-
+crunch
   Copyright 2019 Christopher Simpkins
   MIT License
 
   Source: https://github.com/chrissimpkins/Crunch
+
+  Copyright 2026 AkatQuas
+  MIT License
+
+  Source: https://github.com/AkatQuas/Crunch
 ==================================================
 
 crunch is a command line executable that performs lossy optimization of one
@@ -78,6 +78,7 @@ or more png image files with pngquant and zopflipng.
 
 Usage:
     $ crunch [options] [image path 1]...[image path n]
+    $ crunch [options] path_to_folder
 
 Options:
     --help, -h      application help
@@ -102,11 +103,10 @@ Options:
 
 
 def signal_handler(signum, frame):
-    """Handle SIGINT (Ctrl+C) to terminate all child processes."""
+    """Handle SIGINT (Ctrl+C) to terminate all child processes with full cleanup."""
     # Ignore this signal to prevent recursion when we send SIGTERM to our process group
     signal.signal(signum, signal.SIG_IGN)
 
-    # Write to stderr directly to avoid any I/O issues
     import sys
 
     sys.stderr.write("\nReceived interrupt signal. Terminating all processes...\n")
@@ -118,8 +118,11 @@ def signal_handler(signum, frame):
         try:
             pool.terminate()
             pool.join()
+            pool.close()
         except Exception:
             pass
+        finally:
+            pool = None  # CRITICAL: Clear global reference to eliminate tracker leaks
 
     # Also kill any remaining child processes in our process group
     # This catches stray pngquant/zopflipng processes that may have
@@ -143,18 +146,15 @@ def signal_handler(signum, frame):
 
 
 def main(argv):
-
-    # Register signal handlers for graceful shutdown on Ctrl+C
+    # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # Create the Crunch dot directory in $HOME if it does not exist
-    # Only used for macOS GUI and macOS right-click menu service execution
-    if len(argv) > 0 and argv[0] in ("--gui", "--service"):
-        if not os.path.isdir(CRUNCH_DOT_DIRECTORY):
-            os.makedirs(CRUNCH_DOT_DIRECTORY)
-        # Log entries are appended to the file on every script execution
-        # (see log_error and log_info functions below)
+    # Create config directory
+    if not os.path.isdir(CRUNCH_DOT_DIRECTORY):
+        os.makedirs(CRUNCH_DOT_DIRECTORY)
+    # Log entries are appended to the file on every script execution
+    # (see log_error and log_info functions below)
 
     # ////////////////////////
     # ANSI COLOR DEFINITIONS
@@ -164,21 +164,10 @@ def main(argv):
     else:
         ERROR_STRING = "[ ! ]"
 
-    # //////////////////////////////////
-    # CONFIRM ARGUMENT PRESENT
-    # //////////////////////////////////
-
-    if len(argv) == 0:
-        sys.stderr.write(
-            f"{ERROR_STRING} Please include one or more paths to PNG image files as "
-            "arguments to the script.{os.linesep}"
-        )
-        sys.exit(1)
-
+    argv = argv if len(argv) > 0 else ["-h"]
     # //////////////////////////////////////
     # HELP, USAGE, VERSION option handling
     # //////////////////////////////////////
-
     if argv[0] in ("-v", "--version"):
         print(VERSION_STRING)
         sys.exit(0)
@@ -189,8 +178,7 @@ def main(argv):
         print(USAGE)
         sys.exit(0)
     elif argv[0] in ("-l", "--log"):
-        # Handle log output with optional line count
-        num_lines = 200  # default
+        num_lines = 200
         if len(argv) > 1:
             try:
                 num_lines = int(argv[1])
@@ -228,8 +216,28 @@ def main(argv):
 
     if is_gui(argv):
         png_path_list = argv[1:]
+        # Argument check
+        if len(png_path_list) == 0:
+            sys.stderr.write(
+                f"{ERROR_STRING} Please include one or more paths to PNG image files as "
+                "arguments to the script.{os.linesep}"
+            )
+            sys.exit(1)
     else:
         png_path_list = argv
+        # If single folder argument provided, expand to all PNG files in that folder
+        if len(png_path_list) == 1 and os.path.isdir(png_path_list[0]):
+            folder_path = png_path_list[0]
+            png_path_list = []
+            for root, _dirs, files in os.walk(folder_path):
+                for filename in files:
+                    if filename.lower().endswith(".png"):
+                        png_path_list.append(os.path.join(root, filename))
+            if not png_path_list:
+                sys.stderr.write(
+                    f"{ERROR_STRING} No PNG files found in folder '{folder_path}'.{os.linesep}"
+                )
+                sys.exit(1)
 
     # //////////////////////////////////
     # COMMAND LINE ERROR HANDLING
@@ -238,8 +246,7 @@ def main(argv):
     # Filter out invalid paths and continue with valid ones
     valid_png_paths = []
     for png_path in png_path_list:
-        # Not a file test
-        if not os.path.isfile(png_path):  # is not an existing file
+        if not os.path.isfile(png_path):
             sys.stderr.write(
                 f"{ERROR_STRING} '{png_path}' does not appear to be a "
                 f"valid path to a PNG file. Skipping...{os.linesep}"
@@ -253,10 +260,8 @@ def main(argv):
             if is_gui(argv):
                 log_error(f"{png_path} is not a valid PNG file. Skipping...")
             continue
-        # File is valid, add to our list
         valid_png_paths.append(png_path)
 
-    # If no valid files remain, exit
     if not valid_png_paths:
         sys.stderr.write(
             f"No valid PNG files found. Please try again "
@@ -266,10 +271,9 @@ def main(argv):
             log_error("No valid PNG files found.")
         sys.exit(1)
 
-    # Use the filtered list of valid paths
     png_path_list = valid_png_paths
 
-    # Dependency error handling
+    # Dependency check
     if not os.path.exists(PNGQUANT_EXE_PATH):
         sys.stderr.write(
             f"{ERROR_STRING} pngquant executable was not identified on path "
@@ -296,7 +300,6 @@ def main(argv):
     # ////////////////////////////////////
     print("Crunching ...")
 
-    # create locks
     ss_lock = Lock()
     log_lock = Lock()
 
@@ -329,34 +332,33 @@ def main(argv):
         # to address shared memory leak described in
         # https://github.com/chrissimpkins/Crunch/issues/100
         global pool
-        pool = Pool(
-            processes,
-            initializer=lock_init,
-            initargs=(ss_lock, log_lock, REPLACE_ORIGINAL),
-        )
-
         try:
+            pool = Pool(
+                processes,
+                initializer=lock_init,
+                initargs=(ss_lock, log_lock, REPLACE_ORIGINAL),
+            )
             pool.map(optimize_png, png_path_list)
         except Exception as e:
-            if stdstream_lock:
+            # Release locks if stuck
+            if stdstream_lock and stdstream_lock.acquire(block=False):
                 stdstream_lock.release()
             sys.stderr.write(f"-----{os.linesep}")
             sys.stderr.write(
-                f"{ERROR_STRING} Error detected during execution of the request."
-                f"{os.linesep}"
+                f"{ERROR_STRING} Error detected during execution." f"{os.linesep}"
             )
             sys.stderr.write(f"{e}{os.linesep}")
-            if stdstream_lock:
-                stdstream_lock.release()
             if is_gui(argv):
                 log_error(str(e))
             sys.exit(1)
         finally:
-            pool.close()
-            pool.join()
-            pool = None
+            # CRITICAL CLEANUP: Fixes semaphore leak
+            if pool is not None:
+                pool.close()
+                pool.join()
+                pool = None
 
-    # end of successful processing, exit code 0
+    # Exit successfully
     if is_gui(argv):
         log_info("Crunch execution ended.")
     sys.exit(0)
@@ -406,14 +408,13 @@ def optimize_png(png_path):
             if stdstream_lock:
                 stdstream_lock.acquire()
             sys.stderr.write(
-                f"{ERROR_STRING} {img.pre_filepath} processing failed at the pngquant "
-                f"stage.{os.linesep}"
+                f"{ERROR_STRING} {img.pre_filepath} processing failed at pngquant stage.{os.linesep}"
             )
             if stdstream_lock:
                 stdstream_lock.release()
             if is_gui(sys.argv):
                 log_error(
-                    f"{img.pre_filepath} processing failed at the pngquant stage."
+                    f"{img.pre_filepath} processing failed at pngquant stage."
                     f"{os.linesep}{cpe}"
                 )
                 return None
@@ -422,7 +423,7 @@ def optimize_png(png_path):
     except Exception as e:
         if is_gui(sys.argv):
             log_error(
-                f"{img.pre_filepath} processing failed at the pngquant stage."
+                f"{img.pre_filepath} processing failed at pngquant stage."
                 f"{os.linesep}{e}"
             )
             return None
@@ -456,14 +457,13 @@ def optimize_png(png_path):
         if stdstream_lock:
             stdstream_lock.acquire()
         sys.stderr.write(
-            f"{ERROR_STRING} {img.pre_filepath} processing failed at the zopflipng "
-            f"stage.{os.linesep}"
+            f"{ERROR_STRING} {img.pre_filepath} processing failed at zopflipng stage.{os.linesep}"
         )
         if stdstream_lock:
             stdstream_lock.release()
         if is_gui(sys.argv):
             log_error(
-                f"{img.pre_filepath} processing failed at the zopflipng stage."
+                f"{img.pre_filepath} processing failed at zopflipng stage."
                 f"{os.linesep}{cpe}"
             )
             return None
@@ -472,14 +472,13 @@ def optimize_png(png_path):
     except Exception as e:
         if is_gui(sys.argv):
             log_error(
-                f"{img.pre_filepath} processing failed at the zopflipng stage."
+                f"{img.pre_filepath} processing failed at zopflipng stage."
                 f"{os.linesep}{e}"
             )
             return None
         else:
             raise e
 
-    # Check file size post-optimization and report comparison with pre-optimization file
     img.get_post_filesize()
     percent = img.get_compression_percent()
 
@@ -497,35 +496,14 @@ def optimize_png(png_path):
     # stdout (command line executable)
     if stdstream_lock:
         stdstream_lock.acquire()
-    print(
-        "[ "
-        + percent_string
-        + " ] "
-        + img.post_filepath
-        + " ("
-        + str(img.post_size)
-        + " bytes)"
-    )
+    print(f"[ {percent_string} ] {img.post_filepath} ({img.post_size} bytes)")
     if stdstream_lock:
         stdstream_lock.release()
 
     # report percent original file size / post file path / size (bytes) to log file
     # (macOS GUI + right-click service)
     if is_gui(sys.argv):
-        log_info(
-            "[ "
-            + percent_string
-            + " ] "
-            + img.post_filepath
-            + " ("
-            + str(img.post_size)
-            + " bytes)"
-        )
-
-
-# -----------
-# Utilities
-# -----------
+        log_info(f"[ {percent_string} ] {img.post_filepath} ({img.post_size} bytes)")
 
 
 def run_subprocess(command):
@@ -556,7 +534,6 @@ def fix_filepath_args(args):
     parsed_filepath = ""
     for arg in args:
         if arg[0] == "-":
-            # add command line options
             arg_list.append(arg)
         elif len(arg) > 2 and "." in arg[1:]:
             # if format is `\w+\.\w+`, then this is a filename, not directory
@@ -576,18 +553,18 @@ def fix_filepath_args(args):
 
 
 def get_pngquant_path():
-    if sys.argv[1] == "--gui":
+    if len(sys.argv) > 1 and sys.argv[1] == "--gui":
         return "./pngquant"
-    elif sys.argv[1] == "--service":
+    elif len(sys.argv) > 1 and sys.argv[1] == "--service":
         return "/Applications/Crunch.app/Contents/Resources/pngquant"
     else:
         return PNGQUANT_CLI_PATH
 
 
 def get_zopflipng_path():
-    if sys.argv[1] == "--gui":
+    if len(sys.argv) > 1 and sys.argv[1] == "--gui":
         return "./zopflipng"
-    elif sys.argv[1] == "--service":
+    elif len(sys.argv) > 1 and sys.argv[1] == "--service":
         return "/Applications/Crunch.app/Contents/Resources/zopflipng"
     else:
         return ZOPFLIPNG_CLI_PATH
@@ -624,7 +601,7 @@ def log_error(errmsg):
     if logging_lock:
         logging_lock.acquire()
     with open(LOGFILE_PATH, "a") as filewriter:
-        filewriter.write(current_time + "\tERROR\t" + errmsg + os.linesep)
+        filewriter.write(f"{current_time}\tERROR\t{errmsg}{os.linesep}")
         filewriter.flush()
         os.fsync(filewriter.fileno())
     if logging_lock:
@@ -636,7 +613,7 @@ def log_info(infomsg):
     if logging_lock:
         logging_lock.acquire()
     with open(LOGFILE_PATH, "a") as filewriter:
-        filewriter.write(current_time + "\tINFO\t" + infomsg + os.linesep)
+        filewriter.write(f"{current_time}\tINFO\t{infomsg}{os.linesep}")
         filewriter.flush()
         os.fsync(filewriter.fileno())
     if logging_lock:
@@ -657,7 +634,6 @@ def print_log(num_lines=200):
         print("Log file is empty.")
         return
 
-    # Get the last N lines
     tail_lines = lines[-num_lines:] if len(lines) > num_lines else lines
     print(f"--- Last {len(tail_lines)} lines of {LOGFILE_PATH} ---")
     for line in tail_lines:
@@ -671,15 +647,13 @@ def shellquote(filepath):
 def format_ansi_red(text):
     if sys.stdout.isatty():
         return "\033[0;31m" + text + "\033[0m"
-    else:
-        return text
+    return text
 
 
 def format_ansi_green(text):
     if sys.stdout.isatty():
         return "\033[0;32m" + text + "\033[0m"
-    else:
-        return text
+    return text
 
 
 # ///////////////////////
@@ -721,8 +695,7 @@ class ImageFile(object):
 
     def get_compression_percent(self):
         ratio = float(self.post_size) / float(self.pre_size)
-        percent = ratio * 100
-        return percent
+        return ratio * 100
 
 
 if __name__ == "__main__":

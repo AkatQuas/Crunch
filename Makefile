@@ -1,3 +1,10 @@
+VENV := .venv
+VENV_ACTIVATE := $(VENV)/bin/activate
+
+# Create virtual environment only if it does NOT exist
+$(VENV_ACTIVATE):
+	uv venv
+
 # Build targets
 build-dependencies:
 	src/install-dependencies.sh
@@ -29,10 +36,14 @@ build-macos-installer: ## create fast dmg during development
 	open bin
 
 # Install targets
+install-python-deps: $(VENV_ACTIVATE)
+	uv pip install -r requirements.txt
+
 install-executable:
-	sudo cp src/crunch.py /usr/local/bin/crunch
+	mkdir -p ~/.local/bin
+	cp src/crunch.py ~/.local/bin/crunch
 	@echo " "
-	@echo "[*] crunch executable installed on path /usr/local/bin/crunch"
+	@echo "[*] crunch executable installed on path ~/.local/bin/crunch"
 	@echo "[*] Usage: $ crunch [options] [image path 1]...[image path n]"
 
 install-macos-service:
@@ -44,7 +55,7 @@ install-macos-service:
 	@echo "[*] You can use the Crunch service by right clicking on one or more PNG files, then select Services > Crunch Image(s)"
 
 uninstall-executable:
-	sudo rm /usr/local/bin/crunch
+	rm ~/.local/bin/crunch
 	@echo " "
 	@echo "[*] crunch executable uninstall complete."
 
@@ -57,10 +68,10 @@ uninstall-macos-service:
 test-coverage:
 	./coverage.sh
 
-test-python:
+test-python: $(VENV_ACTIVATE)
 	. .venv/bin/activate && tox && black --check src/crunch.py
 
-test-shell:
+test-shell: $(VENV_ACTIVATE)
 	. .venv/bin/activate && shellcheck --exclude=2046 src/*.sh
 
 test-valid-png-output:
@@ -84,4 +95,4 @@ dist-homebrew:
 	cask-repair crunch
 
 
-.PHONY: benchmark build-dependencies build-macos-icns build-macos-installer install-executable install-macos-service uninstall-dependencies uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist dist-homebrew clean
+.PHONY: benchmark build-dependencies build-macos-icns build-macos-installer install-python-deps install-executable install-macos-service uninstall-dependencies uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist dist-homebrew clean
