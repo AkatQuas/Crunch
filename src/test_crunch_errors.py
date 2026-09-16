@@ -116,67 +116,71 @@ def test_crunch_exception_multiprocessing_pool(capsys, monkeypatch):
 
 # ///////////////////////////////////////////////////////
 #
-# --replace / -r flag tests
+# --output / -o flag tests
 #
 # ///////////////////////////////////////////////////////
 
 
-def test_replace_flag_must_be_first(capsys):
-    """Test that --replace flag must come first (before --gui/--service)."""
-    # When --gui comes first, --replace after it is treated as a file path
+def test_output_flag_not_allowed_with_gui(capsys):
+    """Test that --output flag is not allowed with --gui mode."""
     with pytest.raises(SystemExit) as exit_info:
-        src.crunch.main(["--gui", "--replace", "testfiles/robot.png"])
+        src.crunch.main(["--gui", "-o", "out.png", "testfiles/robot.png"])
 
     out, err = capsys.readouterr()
-    # Should fail with invalid file path error, not the replace error
-    assert "does not appear to be a valid path to a PNG file" in err
-
-
-def test_replace_flag_not_allowed_with_service(capsys):
-    """Test that --replace flag is not allowed with --service mode when it comes first."""
-    with pytest.raises(SystemExit) as exit_info:
-        src.crunch.main(["--replace", "--service", "testfiles/robot.png"])
-
-    out, err = capsys.readouterr()
-    assert "--replace / -r flag is not supported in GUI or Service mode" in err
+    assert "--output / -o flag is not supported in GUI or Service mode" in err
     assert exit_info.value.code == 1
 
 
-def test_replace_short_flag_with_gui_after(capsys):
-    """Test that -r flag is not allowed with --gui when gui comes after."""
+def test_output_flag_not_allowed_with_service(capsys):
+    """Test that --output flag is not allowed with --service mode."""
     with pytest.raises(SystemExit) as exit_info:
-        src.crunch.main(["-r", "--gui", "testfiles/robot.png"])
+        src.crunch.main(["-o", "out.png", "--service", "testfiles/robot.png"])
 
     out, err = capsys.readouterr()
-    assert "--replace / -r flag is not supported in GUI or Service mode" in err
+    assert "--output / -o flag is not supported in GUI or Service mode" in err
     assert exit_info.value.code == 1
 
 
-def test_replace_flag_sets_global_variable(monkeypatch):
-    """Test that --replace flag sets REPLACE_ORIGINAL to True."""
-    # Reset the global variable before test
-    monkeypatch.setattr(src.crunch, 'REPLACE_ORIGINAL', False)
-
-    # Mock the dependency paths to avoid missing dependency errors
-    monkeypatch.setattr(src.crunch, 'get_pngquant_path', lambda: "bogus_pngquant")
-    monkeypatch.setattr(src.crunch, 'get_zopflipng_path', lambda: "bogus_zopflipng")
-
-    with pytest.raises(SystemExit):
+def test_replace_flag_removed(capsys):
+    """Test that removed --replace flag reports a helpful error."""
+    with pytest.raises(SystemExit) as exit_info:
         src.crunch.main(["--replace", "testfiles/robot.png"])
 
-    assert src.crunch.REPLACE_ORIGINAL is True
+    out, err = capsys.readouterr()
+    assert "--replace / -r has been removed" in err
+    assert exit_info.value.code == 1
 
 
-def test_replace_short_flag_sets_global_variable(monkeypatch):
-    """Test that -r flag sets REPLACE_ORIGINAL to True."""
-    # Reset the global variable before test
-    monkeypatch.setattr(src.crunch, 'REPLACE_ORIGINAL', False)
-
-    # Mock the dependency paths to avoid missing dependency errors
-    monkeypatch.setattr(src.crunch, 'get_pngquant_path', lambda: "bogus_pngquant")
-    monkeypatch.setattr(src.crunch, 'get_zopflipng_path', lambda: "bogus_zopflipng")
-
-    with pytest.raises(SystemExit):
+def test_replace_short_flag_removed(capsys):
+    """Test that removed -r flag reports a helpful error."""
+    with pytest.raises(SystemExit) as exit_info:
         src.crunch.main(["-r", "testfiles/robot.png"])
 
-    assert src.crunch.REPLACE_ORIGINAL is True
+    out, err = capsys.readouterr()
+    assert "--replace / -r has been removed" in err
+    assert exit_info.value.code == 1
+
+
+def test_output_flag_missing_argument(capsys):
+    """Test that --output without a path reports an error."""
+    with pytest.raises(SystemExit) as exit_info:
+        src.crunch.main(["-o"])
+
+    out, err = capsys.readouterr()
+    assert "Missing argument for -o" in err
+    assert exit_info.value.code == 1
+
+
+def test_output_flag_not_allowed_with_multiple_files(capsys, monkeypatch):
+    """Test that --output is rejected when multiple input files are provided."""
+    monkeypatch.setattr(src.crunch, "get_pngquant_path", lambda: "bogus_pngquant")
+    monkeypatch.setattr(src.crunch, "get_zopflipng_path", lambda: "bogus_zopflipng")
+
+    with pytest.raises(SystemExit) as exit_info:
+        src.crunch.main(
+            ["-o", "out.png", "testfiles/robot.png", "testfiles/cat.png"]
+        )
+
+    out, err = capsys.readouterr()
+    assert "--output / -o can only be used with a single input file" in err
+    assert exit_info.value.code == 1

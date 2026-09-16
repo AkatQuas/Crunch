@@ -3,6 +3,11 @@
 ### v6.3.0
 
 - Migrate from flake8 to black
+- CLI replaces original PNG files in place by default
+- Add `-o` / `--output` for single-file alternate output paths
+- Remove `--replace` / `-r` flag (use default in-place behavior or `-o` instead)
+- Add `GUI_MODE` and `OUTPUT_PATHS` for reliable execution context in workers and tests
+- Update docs, Makefile, and tests for new CLI output behavior
 
 ### v6.2.0
 

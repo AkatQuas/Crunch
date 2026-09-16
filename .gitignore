@@ -4,6 +4,11 @@ __pycache__
 *.pyc
 .tox
 .coverage
-\.DS_Store
+.venv
+.DS_Store
 *.dmg
 *-checksum.txt
+
+# Benchmark temporary files (see benchmarks/Makefile)
+benchmarks/img/.originals/
+benchmarks/img/*-crunch.png

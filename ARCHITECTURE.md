@@ -40,17 +40,24 @@ Crunch is a lossy PNG image optimization tool that combines two compression tech
 
 **crunch.py** - The central Python module that handles:
 
-- **Argument parsing and validation** - CLI argument handling, PNG file validation
+- **Argument parsing and validation** - CLI option handling (`-o` / `--output`), PNG file validation, folder expansion
+- **Output file handling** - In-place replacement in CLI mode; `-crunch` suffix files in GUI/service modes
 - **Image processing pipeline** - Two-stage optimization (pngquant → zopflipng)
 - **Parallel processing** - Uses Python's `multiprocessing.Pool` for batch optimization
 - **Logging** - File-based logging for GUI and service modes
 
 Key classes and functions:
 
-- `ImageFile` - Represents a PNG file with pre/post optimization paths and sizes
+- `ImageFile` - Represents a PNG file with pre/post optimization paths and sizes; `finalize_output()` writes the result in CLI mode
 - `optimize_png()` - Main optimization function that chains pngquant and zopflipng
+- `parse_cli_options()` / `build_output_paths()` - Parse `-o` and map input files to output destinations
 - `is_valid_png()` - Validates PNG file signatures
 - `get_pngquant_path()` / `get_zopflipng_path()` - Resolves dependency paths based on execution context
+
+Global state used across worker processes:
+
+- `GUI_MODE` - Set from `main()` argv; distinguishes CLI from `--gui` / `--service` execution
+- `OUTPUT_PATHS` - Maps each input path to an output path (`None` means replace original in CLI mode)
 
 ### 2. Optimization Pipeline
 
@@ -82,11 +89,12 @@ Original PNG → pngquant (lossy) → zopflipng (deflate) → Optimized PNG
 
 #### Command-Line Executable
 
-- Python script installed to `/usr/local/bin/crunch`
+- Python script installed to `~/.local/bin/crunch`
 - Dependencies: pngquant at `~/.local/bin/pngquant`, zopflipng at `~/.local/bin/zopflipng`
 - Supports parallel processing with automatic CPU core detection
-
-### 3. User Interfaces
+- **Default output**: replaces each input PNG in place
+- **Optional output**: `-o` / `--output` writes a single input file elsewhere (original preserved)
+- **Folder input**: a single directory argument expands to all PNG files under it (each replaced in place)
 
 #### macOS GUI Application (Platypus)
 
@@ -101,12 +109,14 @@ The Crunch macOS GUI application is created using **Platypus**, a macOS app wrap
 - **Remains Running**: Yes (waits for dropped files)
 - **Droppable**: Yes (accepts dropped PNG files)
 - **Accepts Files**: Yes
+- **Output**: writes `[original filename]-crunch.png` alongside each original (original preserved)
 
 #### macOS Finder Service
 
 - Right-click "Crunch Image(s)" service
 - Processes selected PNG files from Finder
 - Installed as `~/Library/Services/Crunch Image(s).workflow`
+- **Output**: writes `[original filename]-crunch.png` alongside each original (original preserved)
 
 ### 4. Build System
 
@@ -117,7 +127,7 @@ The Crunch macOS GUI application is created using **Platypus**, a macOS app wrap
 - `install-macos-service` - Installs Finder service
 - `build-macos-icns` - Builds macOS icon set
 - `build-macos-installer` - Creates DMG installer from existing `Crunch.app` (requires `create-dmg`)
-- `test` - Runs Python tests, shellcheck, and PNG validation
+- `test-valid-png-output` - Validates optimized PNG output with pngcheck (uses a temp directory to avoid modifying fixtures)
 
 **Build Workflow:**
 
@@ -162,11 +172,21 @@ The `Crunch.platypus` profile file is the configuration source that defines this
 
 The application detects execution context to resolve dependency paths:
 
-| Context | pngquant Path                                          | zopflipng Path           |
-| ------- | ------------------------------------------------------ | ------------------------ |
-| CLI     | `~/.local/bin/pngquant`                                | `~/.local/bin/zopflipng` |
-| GUI     | `./pngquant` (relative)                                | `./zopflipng` (relative) |
-| Service | `/Applications/Crunch.app/Contents/Resources/pngquant` | Full path to app bundle  |
+| Context | pngquant Path                                          | zopflipng Path           | Output behavior                                      |
+| ------- | ------------------------------------------------------ | ------------------------ | ---------------------------------------------------- |
+| CLI     | `~/.local/bin/pngquant`                                | `~/.local/bin/zopflipng` | Replace original in place; `-o` for single-file path |
+| GUI     | `./pngquant` (relative)                                | `./zopflipng` (relative) | Write `[name]-crunch.png` alongside original         |
+| Service | `/Applications/Crunch.app/Contents/Resources/pngquant` | Full path to app bundle  | Write `[name]-crunch.png` alongside original         |
+
+## Optimization Pipeline Detail
+
+Processing always uses a temporary `-crunch` suffix path for pngquant/zopflipng. Final placement depends on context:
+
+```
+CLI (default):   temp → finalize_output() → replace original
+CLI (-o path):   temp → finalize_output() → move to output path
+GUI / Service:   temp → leave as [name]-crunch.png
+```
 
 ## Quality Assurance
 

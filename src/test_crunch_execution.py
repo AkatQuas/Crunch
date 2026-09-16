@@ -4,6 +4,7 @@
 import os
 import shutil
 import sys
+import tempfile
 from subprocess import CalledProcessError
 
 import pytest
@@ -235,7 +236,8 @@ def test_crunch_function_fix_filepath_args_two_nonpng_files():
 
 # optimize_png function
 
-def test_crunch_function_optimize_png_unoptimized_file():
+def test_crunch_function_optimize_png_unoptimized_file(monkeypatch):
+    monkeypatch.setattr(src.crunch, "GUI_MODE", True)
     startpath = os.path.join("testfiles", "robot.png")
     testpath = os.path.join("testfiles", "robot-crunch.png")
     # cleanup any existing files from previous tests
@@ -251,7 +253,8 @@ def test_crunch_function_optimize_png_unoptimized_file():
         os.remove(testpath)
 
 
-def test_crunch_function_optimize_png_preoptimized_file():
+def test_crunch_function_optimize_png_preoptimized_file(monkeypatch):
+    monkeypatch.setattr(src.crunch, "GUI_MODE", True)
     startpath = os.path.join("testfiles", "cat-cr.png") # test a file that has previously been optimized
     testpath = os.path.join("testfiles", "cat-cr-crunch.png")
     # cleanup any existing files from previous tests
@@ -279,66 +282,66 @@ def test_crunch_function_optimize_png_bad_filetype(capsys):
 # main function
 
 def test_crunch_function_main_single_file():
-    with pytest.raises(SystemExit) as exit_info:
-        startpath = os.path.join("testfiles", "robot.png")
-        testpath = os.path.join("testfiles", "robot-crunch.png")
-        # cleanup any existing files from previous tests
-        if os.path.exists(testpath):
-            os.remove(testpath)
-        src.crunch.main([startpath])
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sourcepath = os.path.join("testfiles", "robot.png")
+        startpath = os.path.join(tmpdir, "robot.png")
+        crunchpath = os.path.join(tmpdir, "robot-crunch.png")
+        shutil.copy(sourcepath, startpath)
+        with pytest.raises(SystemExit) as exit_info:
+            src.crunch.main([startpath])
 
-    # check for optimized file following execution
-    assert os.path.exists(testpath) is True
-    assert exit_info.value.code == 0
-
-    # cleanup optimized file produced by this test
-    if os.path.exists(testpath):
-        os.remove(testpath)
+        assert os.path.exists(startpath) is True
+        assert os.path.exists(crunchpath) is False
+        assert exit_info.value.code == 0
 
 
 def test_crunch_function_main_single_file_with_spaces_in_path():
-    with pytest.raises(SystemExit) as exit_info:
-        startpath = os.path.join("testfiles", "img with spaces.png")
-        testpath = os.path.join("testfiles", "img with spaces-crunch.png")
-        # cleanup any existing files from previous tests
-        if os.path.exists(testpath):
-            os.remove(testpath)
-        src.crunch.main([startpath])
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sourcepath = os.path.join("testfiles", "img with spaces.png")
+        startpath = os.path.join(tmpdir, "img with spaces.png")
+        crunchpath = os.path.join(tmpdir, "img with spaces-crunch.png")
+        shutil.copy(sourcepath, startpath)
+        with pytest.raises(SystemExit) as exit_info:
+            src.crunch.main([startpath])
 
-    # check for optimized file following execution
-    assert os.path.exists(testpath) is True
-    assert exit_info.value.code == 0
+        assert os.path.exists(startpath) is True
+        assert os.path.exists(crunchpath) is False
+        assert exit_info.value.code == 0
 
-    # cleanup optimized file produced by this test
-    if os.path.exists(testpath):
-        os.remove(testpath)
+
+def test_crunch_function_main_single_file_with_output_flag():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sourcepath = os.path.join("testfiles", "robot.png")
+        startpath = os.path.join(tmpdir, "robot.png")
+        outputpath = os.path.join(tmpdir, "robot-out.png")
+        shutil.copy(sourcepath, startpath)
+        with pytest.raises(SystemExit) as exit_info:
+            src.crunch.main(["-o", outputpath, startpath])
+
+        assert os.path.exists(startpath) is True
+        assert os.path.exists(outputpath) is True
+        assert exit_info.value.code == 0
 
 
 def test_crunch_function_main_multi_file():
-    with pytest.raises(SystemExit) as exit_info:
-        startpath1 = os.path.join("testfiles", "robot.png")
-        startpath2 = os.path.join("testfiles", "cat.png")
-        testpath1 = os.path.join("testfiles", "robot-crunch.png")
-        testpath2 = os.path.join("testfiles", "cat-crunch.png")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sourcepath1 = os.path.join("testfiles", "robot.png")
+        sourcepath2 = os.path.join("testfiles", "cat.png")
+        startpath1 = os.path.join(tmpdir, "robot.png")
+        startpath2 = os.path.join(tmpdir, "cat.png")
+        crunchpath1 = os.path.join(tmpdir, "robot-crunch.png")
+        crunchpath2 = os.path.join(tmpdir, "cat-crunch.png")
 
-        # cleanup any existing files from previous tests
-        if os.path.exists(testpath1):
-            os.remove(testpath1)
-        if os.path.exists(testpath2):
-            os.remove(testpath2)
+        shutil.copy(sourcepath1, startpath1)
+        shutil.copy(sourcepath2, startpath2)
+        with pytest.raises(SystemExit) as exit_info:
+            src.crunch.main([startpath1, startpath2])
 
-        src.crunch.main([startpath1, startpath2])
-
-    # check for optimized file following execution
-    assert os.path.exists(testpath1) is True
-    assert os.path.exists(testpath2) is True
-    assert exit_info.value.code == 0
-
-    # cleanup optimized file produced by this test
-    if os.path.exists(testpath1):
-        os.remove(testpath1)
-    if os.path.exists(testpath2):
-        os.remove(testpath2)
+        assert os.path.exists(startpath1) is True
+        assert os.path.exists(startpath2) is True
+        assert os.path.exists(crunchpath1) is False
+        assert os.path.exists(crunchpath2) is False
+        assert exit_info.value.code == 0
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS platform")
 def test_crunch_function_main_single_file_with_gui_flag():

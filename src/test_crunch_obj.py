@@ -7,7 +7,7 @@ import pytest
 import tempfile
 import shutil
 
-from src.crunch import ImageFile, REPLACE_ORIGINAL
+from src.crunch import ImageFile
 
 
 def test_crunch_imagefile_obj_instantiation():
@@ -37,69 +37,81 @@ def test_crunch_imagefile_obj_get_compression_percent_method():
 
 # ///////////////////////////////////////////////////////
 #
-# ImageFile with REPLACE_ORIGINAL flag tests
+# ImageFile finalize_output tests
 #
 # ///////////////////////////////////////////////////////
 
 
-def test_crunch_imagefile_obj_instantiation_with_replace_flag(monkeypatch):
-    """Test that ImageFile uses temp file path when REPLACE_ORIGINAL is True."""
-    # Set the global flag to True
-    monkeypatch.setattr('src.crunch.REPLACE_ORIGINAL', True)
-
-def test_crunch_imagefile_obj_finalize_replacement(monkeypatch):
-    """Test that finalize_replacement replaces original with optimized file."""
-    # Set the global flag to True
-    monkeypatch.setattr('src.crunch.REPLACE_ORIGINAL', True)
-
-    from src.crunch import ImageFile as ImageFileRebuilt
-
-    # Create a temporary directory for testing
+def test_crunch_imagefile_obj_finalize_output_replace_original(monkeypatch):
+    """Test that finalize_output replaces original with optimized file."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create test files
         original_file = os.path.join(tmpdir, "test.png")
         temp_file = os.path.join(tmpdir, "test-crunch.png")
 
-        # Write some test data
         with open(original_file, 'wb') as f:
             f.write(b'original content')
         with open(temp_file, 'wb') as f:
             f.write(b'optimized content')
 
-        imgfile = ImageFileRebuilt(original_file)
-        # Manually set the post_filepath to our temp file
+        monkeypatch.setattr(
+            "src.crunch.OUTPUT_PATHS", {original_file: None}
+        )
+
+        imgfile = ImageFile(original_file)
         imgfile.post_filepath = temp_file
         imgfile.post_size = len(b'optimized content')
+        imgfile.finalize_output()
 
-        # Call finalize_replacement
-        imgfile.finalize_replacement()
-
-        # Check that original file is replaced with optimized content
         assert os.path.exists(original_file)
-        assert not os.path.exists(temp_file)  # temp file should be removed
+        assert not os.path.exists(temp_file)
         with open(original_file, 'rb') as f:
             assert f.read() == b'optimized content'
 
 
-def test_crunch_imagefile_obj_finalize_replacement_no_temp_file(monkeypatch):
-    """Test that finalize_replacement handles missing temp file gracefully."""
-    monkeypatch.setattr('src.crunch.REPLACE_ORIGINAL', True)
+def test_crunch_imagefile_obj_finalize_output_to_custom_path(monkeypatch):
+    """Test that finalize_output writes to a custom output path."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        original_file = os.path.join(tmpdir, "test.png")
+        temp_file = os.path.join(tmpdir, "test-crunch.png")
+        output_file = os.path.join(tmpdir, "out", "optimized.png")
 
-    from src.crunch import ImageFile as ImageFileRebuilt
+        with open(original_file, 'wb') as f:
+            f.write(b'original content')
+        with open(temp_file, 'wb') as f:
+            f.write(b'optimized content')
 
+        monkeypatch.setattr(
+            "src.crunch.OUTPUT_PATHS", {original_file: output_file}
+        )
+
+        imgfile = ImageFile(original_file)
+        imgfile.post_filepath = temp_file
+        imgfile.post_size = len(b'optimized content')
+        imgfile.finalize_output()
+
+        assert os.path.exists(original_file)
+        assert not os.path.exists(temp_file)
+        assert os.path.exists(output_file)
+        with open(original_file, 'rb') as f:
+            assert f.read() == b'original content'
+        with open(output_file, 'rb') as f:
+            assert f.read() == b'optimized content'
+
+
+def test_crunch_imagefile_obj_finalize_output_no_temp_file(monkeypatch):
+    """Test that finalize_output handles missing temp file gracefully."""
     with tempfile.TemporaryDirectory() as tmpdir:
         original_file = os.path.join(tmpdir, "test.png")
 
-        # Write original file only (no temp file)
         with open(original_file, 'wb') as f:
             f.write(b'original content')
 
-        imgfile = ImageFileRebuilt(original_file)
-        # post_filepath points to non-existent temp file
+        monkeypatch.setattr(
+            "src.crunch.OUTPUT_PATHS", {original_file: None}
+        )
+
+        imgfile = ImageFile(original_file)
         imgfile.post_filepath = os.path.join(tmpdir, "nonexistent-crunch.png")
+        imgfile.finalize_output()
 
-        # Should not raise, just should not do anything
-        imgfile.finalize_replacement()
-
-        # Original should still exist
         assert os.path.exists(original_file)

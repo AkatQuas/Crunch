@@ -35,7 +35,15 @@ The `crunch` command line executable can be installed with `make` or manually. P
 
 Enter paths to your PNG image files as arguments to the `crunch` executable. Please see the [Usage documentation](docs/EXECUTABLE.md#usage).
 
-The `--replace` / `-r` flag is available to replace the original file with the optimized version (CLI only).
+In CLI mode, optimized images **replace the original files by default**. To write the result elsewhere while keeping the original, pass a single input file with `-o` / `--output`:
+
+```
+$ crunch image.png              # replace image.png in place
+$ crunch image.png -o out.png   # write to out.png, keep original
+$ crunch *.png                  # replace each file in place
+```
+
+The GUI and macOS service still write a new file alongside the original with a `-crunch` suffix.
 
 ### Interrupting Crunch
 

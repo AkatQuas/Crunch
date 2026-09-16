@@ -45,6 +45,7 @@ install-executable:
 	@echo " "
 	@echo "[*] crunch executable installed on path ~/.local/bin/crunch"
 	@echo "[*] Usage: $ crunch [options] [image path 1]...[image path n]"
+	@echo "[*] CLI mode replaces original files by default; use -o PATH with a single input to write elsewhere"
 
 install-macos-service:
 	- sudo rm -rf ~/Library/Services/Crunch\ Image\(s\).workflow
@@ -75,9 +76,11 @@ test-shell: $(VENV_ACTIVATE)
 	. .venv/bin/activate && shellcheck --exclude=2046 src/*.sh
 
 test-valid-png-output:
-	crunch testfiles/*.png
-	pngcheck testfiles/*-crunch.png
-	rm testfiles/*-crunch.png
+	@tmpdir=$$(mktemp -d) && \
+	cp testfiles/*.png $$tmpdir/ && \
+	crunch $$tmpdir/*.png && \
+	pngcheck $$tmpdir/*.png && \
+	rm -rf $$tmpdir
 
 test: test-coverage test-python test-shell test-valid-png-output
 

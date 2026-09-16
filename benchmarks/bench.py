@@ -14,11 +14,7 @@ import os
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 IMG_DIR = os.path.join(SCRIPT_DIR, "img")
-
-
-def grouped(iterable, n):
-    return zip(*[iter(iterable)] * n)
-
+ORIGINALS_DIR = os.path.join(IMG_DIR, ".originals")
 
 # Glob PNG files in the img subdirectory
 paths = sorted(glob.glob(os.path.join(IMG_DIR, "*.png")))
@@ -27,20 +23,14 @@ percent_list = []
 pre_size_list = []
 post_size_list = []
 
-for path_a, path_b in grouped(paths, 2):
-    # Get just the filenames for comparison
-    filename_a = os.path.basename(path_a)
+for post_path in paths:
+    basename = os.path.basename(post_path)
+    pre_path = os.path.join(ORIGINALS_DIR, basename)
 
-    if "-crunch" in filename_a:
-        post_path = path_a
-        pre_path = path_b
-    else:
-        post_path = path_b
-        pre_path = path_a
-
-    # assert that we are testing the correct pairs of files
-    pre_basename = os.path.basename(pre_path)
-    assert f"{pre_basename[:-4]}-crunch.png" == os.path.basename(post_path)
+    assert os.path.exists(pre_path), (
+        f"Missing original backup for {basename}. "
+        f"Run benchmarks via `make benchmark` so originals are saved first."
+    )
 
     pre_size = os.path.getsize(pre_path)
     post_size = os.path.getsize(post_path)
@@ -51,7 +41,6 @@ for path_a, path_b in grouped(paths, 2):
     post_size_list.append(post_size)
 
     print(f"{post_path}: {percent_size:.2f}%")
-
 
 mean = sum(percent_list) / len(percent_list)
 total_initial_size = sum(pre_size_list)

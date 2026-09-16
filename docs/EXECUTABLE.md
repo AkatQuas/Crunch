@@ -104,30 +104,54 @@ At the completion of processing of each of the requested images, the application
 - optimized image file path
 - final optimized image size in bytes
 
-Optimized files are saved in the same directory as the original with the modified path `[original filename]-crunch.png`.
+By default, the optimized image **replaces the original file** in place. To write the result elsewhere while keeping the original, use `-o` / `--output` with a **single** input file (see below).
+
+You can also pass a directory path to process all PNG files under it recursively:
+
+```
+$ crunch path/to/folder
+```
 
 ### Options
 
 The following options are available for use with the `crunch` executable:
 
 ```
-    --help, -h      application help
-    --usage         application usage
-    --version, -v   application version
-    --log, -l       output log content (use -l N to specify number of lines, default: 200)
-    --replace, -r   replace original file with optimized version (CLI only)
+    --help, -h          application help
+    --usage             application usage
+    --version, -v       application version
+    --log, -l           output log content (use -l N to specify number of lines, default: 200)
+    --output, -o PATH   write optimized image to PATH (single input file only)
 ```
 
-#### --replace / -r
+#### Default behavior (in-place)
 
-The `--replace` (or `-r`) flag replaces the original image file with the optimized version. By default, `crunch` creates a new file with `-crunch` suffix. With this flag, the original file is replaced directly.
+CLI mode replaces each input PNG with its optimized version. The original file is overwritten.
 
-**Example:**
+**Examples:**
 ```
-$ crunch -r image.png
+$ crunch image.png
+$ crunch *.png
+$ crunch path/to/folder
 ```
 
-**Note:** This flag is only available in command line mode. It is not supported in GUI or Service modes.
+#### --output / -o
+
+Use `-o` with a single input file to write the optimized image to a different path. The original file is left unchanged.
+
+**Examples:**
+```
+$ crunch image.png -o optimized.png
+$ crunch image.png -o out/              # writes out/image.png
+```
+
+`-o` cannot be used when multiple input files are provided. For batch processing that must preserve originals, copy files to a staging directory first:
+
+```
+$ mkdir out && cp *.png out/ && crunch out/*.png
+```
+
+**Note:** `-o` is only available in command line mode. It is not supported in GUI or Service modes (those tools write a new file with a `-crunch` suffix alongside the original).
 
 ## Uninstall `crunch` and Dependencies
 

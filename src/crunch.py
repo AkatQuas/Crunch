@@ -42,8 +42,11 @@ VERSION_STRING = "crunch v" + VERSION
 #    as a value of 0
 PROCESSES = 0
 
-# Replace flag - when True, replace original file with optimized version
-REPLACE_ORIGINAL = False
+# Output path mapping for CLI mode: input path -> output path (None = replace original)
+OUTPUT_PATHS = {}
+
+# Execution mode set during main() for use in worker processes
+GUI_MODE = False
 
 # Dependency Path Constants for Command Line Executable
 #  - Redefine these path strings to use system-installed versions of
@@ -81,24 +84,26 @@ Usage:
     $ crunch [options] path_to_folder
 
 Options:
-    --help, -h      application help
-    --usage         application usage
-    --version, -v   application version
-    --log, -l       output log content (use -l N to specify number of lines, default: 200)
-    --replace, -r   replace original file with optimized version (CLI only)
+    --help, -h          application help
+    --usage             application usage
+    --version, -v       application version
+    --log, -l           output log content (use -l N to specify number of lines, default: 200)
+    --output, -o PATH   write optimized image to PATH (CLI only)
 
 Notes:
-    - --replace / -r is only available in command line mode
-    - Not supported in --gui or --service modes
-    - Without --replace, a new file with "-crunch" suffix is created
+    - By default, the original file is replaced after optimization (CLI only)
+    - Use --output / -o with a single input file to write elsewhere
+    - --output is not supported with multiple input files (each file is replaced in place)
+    - --output is not supported in --gui or --service modes
+    - GUI and service modes create a new file with "-crunch" suffix
 """
 
 USAGE = """$ crunch [options] [image path 1]...[image path n]
 
 Options:
-    -r, --replace   replace original file with optimized version
-    --gui           GUI mode (macOS)
-    --service       service mode (macOS)
+    -o, --output PATH   write optimized image to PATH (single input file only)
+    --gui               GUI mode (macOS)
+    --service           service mode (macOS)
 """
 
 
@@ -146,6 +151,9 @@ def signal_handler(signum, frame):
 
 
 def main(argv):
+    global GUI_MODE
+    GUI_MODE = is_gui(argv)
+
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -159,7 +167,7 @@ def main(argv):
     # ////////////////////////
     # ANSI COLOR DEFINITIONS
     # ////////////////////////
-    if not is_gui(sys.argv):
+    if not GUI_MODE:
         ERROR_STRING = "[ " + format_ansi_red("!") + " ]"
     else:
         ERROR_STRING = "[ ! ]"
@@ -191,18 +199,13 @@ def main(argv):
         print_log(num_lines)
         sys.exit(0)
 
-    # Handle --replace / -r flag (only allowed in non-GUI mode)
-    global REPLACE_ORIGINAL
-    if argv[0] in ("-r", "--replace"):
-        if is_gui(argv):
-            sys.stderr.write(
-                f"{ERROR_STRING} --replace / -r flag is not supported in GUI or Service "
-                f"mode.{os.linesep}"
-            )
-            sys.exit(1)
-        REPLACE_ORIGINAL = True
-        # Remove the flag from the argument list so it doesn't get treated as a file path
-        argv = argv[1:]
+    output_option, argv = parse_cli_options(argv, ERROR_STRING)
+    if output_option and GUI_MODE:
+        sys.stderr.write(
+            f"{ERROR_STRING} --output / -o flag is not supported in GUI or Service "
+            f"mode.{os.linesep}"
+        )
+        sys.exit(1)
 
     # ////////////////////////
     # DEFINE DEPENDENCY PATHS
@@ -214,7 +217,7 @@ def main(argv):
     # PARSE PNG_PATH_LIST
     # ////////////////////
 
-    if is_gui(argv):
+    if GUI_MODE:
         png_path_list = argv[1:]
         # Argument check
         if len(png_path_list) == 0:
@@ -257,7 +260,7 @@ def main(argv):
             sys.stderr.write(
                 f"{ERROR_STRING} '{png_path}' is not a valid PNG file. Skipping...{os.linesep}"
             )
-            if is_gui(argv):
+            if GUI_MODE:
                 log_error(f"{png_path} is not a valid PNG file. Skipping...")
             continue
         valid_png_paths.append(png_path)
@@ -267,11 +270,14 @@ def main(argv):
             f"No valid PNG files found. Please try again "
             f"with one or more valid PNG files.{os.linesep}"
         )
-        if is_gui(argv):
+        if GUI_MODE:
             log_error("No valid PNG files found.")
         sys.exit(1)
 
     png_path_list = valid_png_paths
+
+    global OUTPUT_PATHS
+    OUTPUT_PATHS = build_output_paths(png_path_list, output_option, ERROR_STRING)
 
     # Dependency check
     if not os.path.exists(PNGQUANT_EXE_PATH):
@@ -279,7 +285,7 @@ def main(argv):
             f"{ERROR_STRING} pngquant executable was not identified on path "
             f"'{PNGQUANT_EXE_PATH}'{os.linesep}"
         )
-        if is_gui(argv):
+        if GUI_MODE:
             log_error(
                 f"pngquant was not found on the expected path {PNGQUANT_EXE_PATH}"
             )
@@ -289,7 +295,7 @@ def main(argv):
             f"{ERROR_STRING} zopflipng executable was not identified on path "
             f"'{ZOPFLIPNG_EXE_PATH}'{os.linesep}"
         )
-        if is_gui(argv):
+        if GUI_MODE:
             log_error(
                 f"zopflipng was not found on the expected path {ZOPFLIPNG_EXE_PATH}"
             )
@@ -307,7 +313,7 @@ def main(argv):
         # the global locks are not necessary for single file processing
         # but must be instantiated because the logging functions are
         # used for single and multi-process execution
-        lock_init(ss_lock, log_lock, REPLACE_ORIGINAL)
+        lock_init(ss_lock, log_lock, OUTPUT_PATHS, GUI_MODE)
         # there is only one PNG file, skip spawning of processes and just optimize it
         optimize_png(png_path_list[0])
     else:
@@ -336,7 +342,7 @@ def main(argv):
             pool = Pool(
                 processes,
                 initializer=lock_init,
-                initargs=(ss_lock, log_lock, REPLACE_ORIGINAL),
+                initargs=(ss_lock, log_lock, OUTPUT_PATHS, GUI_MODE),
             )
             pool.map(optimize_png, png_path_list)
         except Exception as e:
@@ -348,7 +354,7 @@ def main(argv):
                 f"{ERROR_STRING} Error detected during execution." f"{os.linesep}"
             )
             sys.stderr.write(f"{e}{os.linesep}")
-            if is_gui(argv):
+            if GUI_MODE:
                 log_error(str(e))
             sys.exit(1)
         finally:
@@ -359,7 +365,7 @@ def main(argv):
                 pool = None
 
     # Exit successfully
-    if is_gui(argv):
+    if GUI_MODE:
         log_info("Crunch execution ended.")
     sys.exit(0)
 
@@ -379,7 +385,7 @@ def optimize_png(png_path):
     # ////////////////////////
     # ANSI COLOR DEFINITIONS
     # ////////////////////////
-    if not is_gui(sys.argv):
+    if not GUI_MODE:
         ERROR_STRING = "[ " + format_ansi_red("!") + " ]"
     else:
         ERROR_STRING = "[ ! ]"
@@ -412,7 +418,7 @@ def optimize_png(png_path):
             )
             if stdstream_lock:
                 stdstream_lock.release()
-            if is_gui(sys.argv):
+            if GUI_MODE:
                 log_error(
                     f"{img.pre_filepath} processing failed at pngquant stage."
                     f"{os.linesep}{cpe}"
@@ -421,7 +427,7 @@ def optimize_png(png_path):
             else:
                 raise cpe
     except Exception as e:
-        if is_gui(sys.argv):
+        if GUI_MODE:
             log_error(
                 f"{img.pre_filepath} processing failed at pngquant stage."
                 f"{os.linesep}{e}"
@@ -461,7 +467,7 @@ def optimize_png(png_path):
         )
         if stdstream_lock:
             stdstream_lock.release()
-        if is_gui(sys.argv):
+        if GUI_MODE:
             log_error(
                 f"{img.pre_filepath} processing failed at zopflipng stage."
                 f"{os.linesep}{cpe}"
@@ -470,7 +476,7 @@ def optimize_png(png_path):
         else:
             raise cpe
     except Exception as e:
-        if is_gui(sys.argv):
+        if GUI_MODE:
             log_error(
                 f"{img.pre_filepath} processing failed at zopflipng stage."
                 f"{os.linesep}{e}"
@@ -482,14 +488,14 @@ def optimize_png(png_path):
     img.get_post_filesize()
     percent = img.get_compression_percent()
 
-    # Replace original file with optimized version if --replace flag is set
-    if REPLACE_ORIGINAL:
-        img.finalize_replacement()
+    # CLI mode: replace original or move to --output path
+    if not GUI_MODE:
+        img.finalize_output()
 
     percent_string = "{0:.2f}%".format(percent)
     # if compression occurred, color the percent string green
     # otherwise, leave it default text color
-    if not is_gui(sys.argv) and percent < 100:
+    if not GUI_MODE and percent < 100:
         percent_string = format_ansi_green(percent_string)
 
     # report percent original file size / post file path / size (bytes) to
@@ -502,7 +508,7 @@ def optimize_png(png_path):
 
     # report percent original file size / post file path / size (bytes) to log file
     # (macOS GUI + right-click service)
-    if is_gui(sys.argv):
+    if GUI_MODE:
         log_info(f"[ {percent_string} ] {img.post_filepath} ({img.post_size} bytes)")
 
 
@@ -527,6 +533,70 @@ def run_subprocess(command):
         raise CalledProcessError(returncode, command)
 
     return None
+
+
+def parse_cli_options(argv, error_string):
+    """Parse CLI options from argv. Returns (output_path, remaining_args)."""
+    output_path = None
+    remaining = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("-o", "--output"):
+            if i + 1 >= len(argv):
+                sys.stderr.write(
+                    f"{error_string} Missing argument for {arg}.{os.linesep}"
+                )
+                sys.exit(1)
+            output_path = argv[i + 1]
+            i += 2
+        elif arg in ("-r", "--replace"):
+            sys.stderr.write(
+                f"{error_string} --replace / -r has been removed. "
+                f"Original files are replaced by default in CLI mode. "
+                f"Use --output / -o to write to a different path.{os.linesep}"
+            )
+            sys.exit(1)
+        else:
+            remaining.append(arg)
+            i += 1
+    return output_path, remaining
+
+
+def build_output_paths(png_path_list, output_option, error_string):
+    """Build input -> output path mapping for CLI execution."""
+    output_paths = {}
+    if not output_option:
+        for png_path in png_path_list:
+            output_paths[png_path] = None
+        return output_paths
+
+    if len(png_path_list) != 1:
+        sys.stderr.write(
+            f"{error_string} --output / -o can only be used with a single "
+            f"input file. Multiple files are always optimized in place.{os.linesep}"
+        )
+        sys.exit(1)
+
+    output_paths[png_path_list[0]] = resolve_output_path(
+        output_option, png_path_list[0]
+    )
+    return output_paths
+
+
+def resolve_output_path(output_option, input_path):
+    """Resolve --output path for a single input file."""
+    if os.path.isdir(output_option):
+        return os.path.join(output_option, os.path.basename(input_path))
+
+    output_dir = os.path.dirname(output_option)
+    if output_dir and not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+    return output_option
+
+
+def get_output_path(input_path):
+    return OUTPUT_PATHS.get(input_path)
 
 
 def fix_filepath_args(args):
@@ -584,16 +654,18 @@ def is_valid_png(filepath):
     return signature == expected_signature
 
 
-def lock_init(ss_lock, log_lock, replace_original=False):
+def lock_init(ss_lock, log_lock, output_paths=None, gui_mode=False):
     # Based on approach described in
     # https://stackoverflow.com/a/25558333/2848172
     global stdstream_lock
     global logging_lock
-    global REPLACE_ORIGINAL
+    global OUTPUT_PATHS
+    global GUI_MODE
 
     stdstream_lock = ss_lock
     logging_lock = log_lock
-    REPLACE_ORIGINAL = replace_original
+    OUTPUT_PATHS = output_paths or {}
+    GUI_MODE = gui_mode
 
 
 def log_error(errmsg):
@@ -680,15 +752,26 @@ class ImageFile(object):
         path, extension = os.path.splitext(self.pre_filepath)
         return path + "-crunch" + extension
 
-    def finalize_replacement(self):
-        """Replace original file with optimized version."""
-        if REPLACE_ORIGINAL and os.path.exists(self.post_filepath):
-            # Remove the original file and rename the optimized file to take its place
+    def finalize_output(self):
+        """Write optimized file to final destination (replace original or --output path)."""
+        if not os.path.exists(self.post_filepath):
+            return
+
+        output_path = get_output_path(self.pre_filepath)
+        if output_path is None:
             os.remove(self.pre_filepath)
             os.rename(self.post_filepath, self.pre_filepath)
-            # Update post_size to reflect the replaced file
-            self.post_size = self._get_filesize(self.pre_filepath)
             self.post_filepath = self.pre_filepath
+        elif os.path.abspath(output_path) != os.path.abspath(self.post_filepath):
+            output_dir = os.path.dirname(output_path)
+            if output_dir and not os.path.isdir(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            shutil.move(self.post_filepath, output_path)
+            self.post_filepath = output_path
+
+        self.post_size = self._get_filesize(self.post_filepath)
 
     def get_post_filesize(self):
         self.post_size = self._get_filesize(self.post_filepath)
