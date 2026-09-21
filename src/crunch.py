@@ -364,7 +364,9 @@ def _run_optimization(execution_context, png_path_list, error_string):
     # ////////////////////////////////////
     print("Crunching ...")
 
-    ProcessRunner.active().run(execution_context, error_string, optimize_png, png_path_list)
+    ProcessRunner.active().run(
+        execution_context, error_string, optimize_png, png_path_list
+    )
 
 
 # ///////////////////////
@@ -614,9 +616,7 @@ class ProcessRunner(object):
 
     def _handle_signal(self, signum, frame):
         signal.signal(signum, signal.SIG_IGN)
-        sys.stderr.write(
-            "\nReceived interrupt signal. Terminating all processes...\n"
-        )
+        sys.stderr.write("\nReceived interrupt signal. Terminating all processes...\n")
         sys.stderr.flush()
         self._terminate_pool()
         self._kill_process_group()

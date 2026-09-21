@@ -1,0 +1,14 @@
+#!/bin/sh
+# Run Python and shell checks before each commit.
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "pre-commit: make test-python"
+make test-python
+
+echo "pre-commit: make test-shell"
+make test-shell
+
+echo "pre-commit: checks passed"

@@ -41,6 +41,10 @@ build-macos-installer: sync-app ## create fast dmg during development
 	open bin
 
 # Install targets
+install-hooks:
+	git config core.hooksPath .githooks
+	@echo "[*] Git pre-commit hook installed (.githooks/pre-commit → test-python, test-shell)"
+
 install-python-deps: $(VENV_ACTIVATE)
 	uv pip install -r requirements.txt
 
@@ -74,10 +78,10 @@ uninstall-macos-service:
 test-coverage:
 	./coverage.sh
 
-test-python: $(VENV_ACTIVATE)
+test-python: install-python-deps
 	. .venv/bin/activate && tox && black --check src/crunch.py
 
-test-shell: $(VENV_ACTIVATE)
+test-shell: install-python-deps
 	. .venv/bin/activate && shellcheck --exclude=2046 src/*.sh
 
 test-valid-png-output:
@@ -103,4 +107,4 @@ dist-homebrew:
 	cask-repair crunch
 
 
-.PHONY: benchmark build-dependencies build-macos-icns build-macos-installer sync-app install-python-deps install-executable install-macos-service uninstall-dependencies uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist dist-homebrew clean
+.PHONY: benchmark build-dependencies build-macos-icns build-macos-installer sync-app install-hooks install-python-deps install-executable install-macos-service uninstall-dependencies uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist dist-homebrew clean

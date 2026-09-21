@@ -7,80 +7,80 @@ Contributions are warmly welcomed! This guide outlines how to set up your develo
 ### Prerequisites
 
 - **Operating System**: macOS or Linux (for development)
-- **Python**: 3.x (Python 2 support removed in v5.0.0)
+- **Python**: 3.12+ (see `tox.ini`)
+- **[uv](https://docs.astral.sh/uv/)**: creates `.venv` and installs Python dependencies via the Makefile
 - **Rust**: 1.63+ (for pngquant v3, see https://rustup.rs)
 - **Build Tools**: make, git, standard C/C++ compiler (for zopfli)
-- **Testing**: tox, black, shellcheck-py (installed via pip), pngcheck (installed via Homebrew)
-- **Platypus** (for macOS GUI app development): https://sveinbjorn.org/platypus
+- **pngcheck** (macOS): `brew install pngcheck`
 
 ### Development Setup
 
 1. **Clone the repository**:
 
    ```bash
-   $ git clone https://github.com/AkatQuas/Crunch.git
-   $ cd Crunch
+   git clone https://github.com/AkatQuas/Crunch.git
+   cd Crunch
    ```
 
-2. **Create a Python virtual environment** (recommended):
+2. **Install Python dependencies** (creates `.venv` if needed):
 
    ```bash
-   $ python3 -m venv .venv
-   $ source .venv/bin/activate
+   make install-python-deps
    ```
 
-3. **Install Python testing dependencies**:
+3. **Install Git pre-commit hooks** (recommended):
 
    ```bash
-   $ pip install -r requirements.txt
+   make install-hooks
    ```
 
-4. **Install system dependencies**:
+   This configures Git to run `.githooks/pre-commit` before each commit. The hook runs:
+
+   - `make test-python` — tox (pytest) + `black --check`
+   - `make test-shell` — shellcheck on `src/*.sh`
+
+   Hooks are per-clone (`git config core.hooksPath .githooks`). Run `make install-hooks` once after cloning.
+
+4. **Install system dependencies** (macOS):
 
    ```bash
-   $ brew install pngcheck
+   brew install pngcheck
    ```
 
-5. **Build project dependencies** (pngquant v3 and zopflipng):
+5. **Build pngquant and zopflipng** (required for integration tests and local `crunch` usage):
 
    ```bash
-   $ make build-dependencies
+   make build-dependencies
+   make install-executable
    ```
 
-   This runs `src/install-dependencies.sh` which builds:
-   - **pngquant v3** - built using Rust/Cargo (requires Rust 1.63+)
-   - **zopflipng** - built using Make
+   `build-dependencies` runs `src/install-dependencies.sh` and installs binaries to `~/.local/bin/`.
 
 6. **Verify installation**:
+
    ```bash
-   $ crunch --version
+   crunch --version
+   make test-python
    ```
 
-### Building the macOS GUI Application
+### macOS GUI app and releases
 
-The macOS GUI application is built using **Platypus** with the `profile/Crunch.platypus` configuration file. To rebuild the app:
-
-1. Install Platypus: `brew install platypus` or download from https://sveinbjorn.org/platypus
-2. Load profile `profile/Crunch.platypus` into Platypus
-3. Click "Create App" to generate `Crunch.app`
-
-After `Crunch.app` is created, you can build the DMG installer:
+The GUI app bundle lives in `bin/Crunch.app`. Source changes go in `src/`; sync into the bundle before packaging:
 
 ```bash
-$ make build-macos-icns      # Build macOS icon set (optional)
-$ make build-macos-installer # Create DMG installer from Crunch.app
+make sync-app
 ```
 
-**Note**: The `create-dmg` tool is required to build the DMG installer.
-
-- For local development (`make build-macos-installer`), use: https://github.com/sindresorhus/create-dmg
-- For distribution builds (`make dist`), use: https://github.com/create-dmg/create-dmg
-
-Install via:
+**Local DMG** (development):
 
 ```bash
-$ npm install -g create-dmg
+brew install create-dmg   # or: npx create-dmg
+make build-macos-installer
 ```
+
+**Published releases** (maintainers): bump `VERSION` in `src/crunch.py`, add a `CHANGELOG.md` section, push to `main`, then run the **Release macOS GUI** workflow in GitHub Actions. The workflow runs tests, `make sync-app`, builds the DMG, creates tag `v{VERSION}`, and uploads `Crunch-Installer.dmg` to GitHub Releases.
+
+Platypus is no longer required for day-to-day development; the app shell in `bin/Crunch.app` is updated in-repo and via `make sync-app`.
 
 ## Making Changes
 
@@ -102,15 +102,21 @@ $ npm install -g create-dmg
 Run the full test suite:
 
 ```bash
-$ make test
+make test
 ```
 
 Individual test targets:
 
 ```bash
-$ make test-python        # Python unit tests + black
-$ make test-shell         # shellcheck validation
-$ make test-valid-png-output  # Verify PNG output validity
+make test-python             # tox (pytest) + black --check
+make test-shell              # shellcheck on src/*.sh
+make test-valid-png-output   # verify PNG output with pngcheck
+```
+
+With `make install-hooks`, `test-python` and `test-shell` also run automatically on every `git commit`. To commit without hooks (emergency only):
+
+```bash
+git commit --no-verify
 ```
 
 ### Benchmarking
@@ -125,13 +131,16 @@ $ make benchmark
 
 1. **Fork** the repository
 2. **Create** a feature branch: `git checkout -b feature/my-feature`
-3. **Make** your changes with clear commit messages
-4. **Test** your changes: `make test`
-5. **Submit** a pull request against `master`
+3. **Run** `make install-hooks` and `make install-python-deps` if you have not already
+4. **Make** your changes with clear commit messages (pre-commit runs `test-python` and `test-shell`)
+5. **Test** your changes: `make test`
+6. **Submit** a pull request against `main`
 
 ### PR Requirements
 
-- [ ] All tests pass (`make test`)
+- [ ] `make install-hooks` run locally (or CI-equivalent checks pass)
+- [ ] `make test-python` and `make test-shell` pass
+- [ ] Full suite passes (`make test`) when integration tests are relevant
 - [ ] Code formatted with `black` (Python)
 - [ ] Shell scripts pass `shellcheck`
 - [ ] New features documented

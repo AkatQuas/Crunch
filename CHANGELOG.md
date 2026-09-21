@@ -2,6 +2,7 @@
 
 ### v6.3.0
 
+- Add Git pre-commit hook (`make install-hooks`) for `test-python` and `test-shell`
 - Migrate from flake8 to black
 - CLI replaces original PNG files in place by default
 - Add `-o` / `--output` for single-file alternate output paths

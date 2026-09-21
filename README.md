@@ -193,7 +193,15 @@ See the [LICENSE.md](LICENSE.md) document for details and additional licensing i
 
 ## Contributing
 
-Contributions to the project are warmly welcomed. Please suggest enhancements as new issue reports on this repository. Source contributors should fork the git repository and submit changes as a Github pull request.
+Contributions to the project are warmly welcomed. Please suggest enhancements as new issue reports on this repository. Source contributors should fork the git repository and submit changes as a GitHub pull request.
+
+After cloning, see [CONTRIBUTING.md](CONTRIBUTING.md) for the full setup guide. Quick start:
+
+```bash
+make install-python-deps   # Python test tools (tox, black, shellcheck)
+make install-hooks         # pre-commit: test-python + test-shell
+make build-dependencies && make install-executable
+```
 
 ## Acknowledgments
 
