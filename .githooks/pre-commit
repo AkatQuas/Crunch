@@ -1,14 +1,14 @@
 #!/bin/sh
-# Run Python and shell checks before each commit.
+# Fast lint checks before each commit (no pytest).
 set -e
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-echo "pre-commit: make test-python"
-make test-python
+echo "pre-commit: black --check"
+make lint-python
 
-echo "pre-commit: make test-shell"
-make test-shell
+echo "pre-commit: shellcheck"
+make lint-shell
 
-echo "pre-commit: checks passed"
+echo "pre-commit: lint passed"

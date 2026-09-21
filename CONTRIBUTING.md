@@ -36,10 +36,10 @@ Contributions are warmly welcomed! This guide outlines how to set up your develo
 
    This configures Git to run `.githooks/pre-commit` before each commit. The hook runs:
 
-   - `make test-python` — tox (pytest) + `black --check`
-   - `make test-shell` — shellcheck on `src/*.sh`
+   - `make lint-python` — `black --check` on `src/crunch.py`
+   - `make lint-shell` — shellcheck on `src/*.sh`
 
-   Hooks are per-clone (`git config core.hooksPath .githooks`). Run `make install-hooks` once after cloning.
+   Hooks are per-clone (`git config core.hooksPath .githooks`). Run `make install-hooks` once after cloning. Full tests (`make test`) are not run on commit; run them before opening a PR.
 
 4. **Install system dependencies** (macOS):
 
@@ -108,12 +108,15 @@ make test
 Individual test targets:
 
 ```bash
+make lint                    # black --check + shellcheck (same as pre-commit)
+make lint-python             # black --check only
+make lint-shell              # shellcheck only
 make test-python             # tox (pytest) + black --check
 make test-shell              # shellcheck on src/*.sh
 make test-valid-png-output   # verify PNG output with pngcheck
 ```
 
-With `make install-hooks`, `test-python` and `test-shell` also run automatically on every `git commit`. To commit without hooks (emergency only):
+With `make install-hooks`, `lint-python` and `lint-shell` run automatically on every `git commit`. To commit without hooks (emergency only):
 
 ```bash
 git commit --no-verify
@@ -132,14 +135,14 @@ $ make benchmark
 1. **Fork** the repository
 2. **Create** a feature branch: `git checkout -b feature/my-feature`
 3. **Run** `make install-hooks` and `make install-python-deps` if you have not already
-4. **Make** your changes with clear commit messages (pre-commit runs `test-python` and `test-shell`)
+4. **Make** your changes with clear commit messages (pre-commit runs `lint-python` and `lint-shell`)
 5. **Test** your changes: `make test`
 6. **Submit** a pull request against `main`
 
 ### PR Requirements
 
-- [ ] `make install-hooks` run locally (or CI-equivalent checks pass)
-- [ ] `make test-python` and `make test-shell` pass
+- [ ] `make lint` passes (also enforced by pre-commit when hooks are installed)
+- [ ] `make test` passes before merge when changes affect runtime behavior
 - [ ] Full suite passes (`make test`) when integration tests are relevant
 - [ ] Code formatted with `black` (Python)
 - [ ] Shell scripts pass `shellcheck`

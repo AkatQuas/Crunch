@@ -2,6 +2,7 @@
 
 ### v6.3.1
 
+- Pre-commit hook runs `lint-python` / `lint-shell` only (black + shellcheck, not pytest)
 - Fix missing Dock/Finder icon (`AppIcon.icns` synced from `img/CrunchIcon.icns`)
 - Fix GUI window height: use @1x animations at 390×190 and correct `clear.html` spacer size
 - `make sync-app` now copies animation GIFs and updates `CFBundleShortVersionString`

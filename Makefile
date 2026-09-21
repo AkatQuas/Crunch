@@ -48,7 +48,7 @@ build-macos-installer: sync-app ## create fast dmg during development
 # Install targets
 install-hooks:
 	git config core.hooksPath .githooks
-	@echo "[*] Git pre-commit hook installed (.githooks/pre-commit → test-python, test-shell)"
+	@echo "[*] Git pre-commit hook installed (.githooks/pre-commit → lint-python, lint-shell)"
 
 install-python-deps: $(VENV_ACTIVATE)
 	uv pip install -r requirements.txt
@@ -79,6 +79,15 @@ uninstall-macos-service:
 	@echo " "
 	@echo "[*] The Crunch Image(s) macOS service was removed from your system"
 
+# Lint targets (used by pre-commit hook)
+lint-python: install-python-deps
+	. .venv/bin/activate && black --check src/crunch.py
+
+lint-shell: install-python-deps
+	. .venv/bin/activate && shellcheck --exclude=2046 src/*.sh
+
+lint: lint-python lint-shell
+
 # Test targets
 test-coverage:
 	./coverage.sh
@@ -86,8 +95,7 @@ test-coverage:
 test-python: install-python-deps
 	. .venv/bin/activate && tox && black --check src/crunch.py
 
-test-shell: install-python-deps
-	. .venv/bin/activate && shellcheck --exclude=2046 src/*.sh
+test-shell: lint-shell
 
 test-valid-png-output:
 	@tmpdir=$$(mktemp -d) && \
@@ -112,4 +120,4 @@ dist-homebrew:
 	cask-repair crunch
 
 
-.PHONY: benchmark build-dependencies build-macos-icns build-macos-installer sync-app install-hooks install-python-deps install-executable install-macos-service uninstall-dependencies uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist dist-homebrew clean
+.PHONY: benchmark build-dependencies build-macos-icns build-macos-installer sync-app install-hooks install-python-deps install-executable install-macos-service uninstall-dependencies uninstall-executable uninstall-macos-service lint lint-python lint-shell test test-coverage test-python test-shell test-valid-png-output dist dist-homebrew clean

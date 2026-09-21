@@ -199,7 +199,7 @@ After cloning, see [CONTRIBUTING.md](CONTRIBUTING.md) for the full setup guide. 
 
 ```bash
 make install-python-deps   # Python test tools (tox, black, shellcheck)
-make install-hooks         # pre-commit: test-python + test-shell
+make install-hooks         # pre-commit: black + shellcheck
 make build-dependencies && make install-executable
 ```
 
