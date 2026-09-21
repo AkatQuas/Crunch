@@ -30,6 +30,11 @@ sync-app: ## copy source into bin/Crunch.app before packaging or release
 	cp src/crunch.py bin/Crunch.app/Contents/Resources/crunch.py
 	cp src/crunch-gui.sh bin/Crunch.app/Contents/Resources/script
 	cp html/*.html bin/Crunch.app/Contents/Resources/
+	cp img/animations/*.gif bin/Crunch.app/Contents/Resources/
+	cp img/CrunchIcon.icns bin/Crunch.app/Contents/Resources/AppIcon.icns
+	@VERSION=$$(sed -n 's/^VERSION = "\(.*\)"/\1/p' src/crunch.py) && \
+		/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $$VERSION" \
+		bin/Crunch.app/Contents/Info.plist
 
 build-macos-installer: sync-app ## create fast dmg during development
 	# https://github.com/sindresorhus/create-dmg

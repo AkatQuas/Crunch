@@ -1,5 +1,11 @@
 ## Changelog
 
+### v6.3.1
+
+- Fix missing Dock/Finder icon (`AppIcon.icns` synced from `img/CrunchIcon.icns`)
+- Fix GUI window height: use @1x animations at 390×190 and correct `clear.html` spacer size
+- `make sync-app` now copies animation GIFs and updates `CFBundleShortVersionString`
+
 ### v6.3.0
 
 - Add Git pre-commit hook (`make install-hooks`) for `test-python` and `test-shell`
