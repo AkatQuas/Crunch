@@ -15,6 +15,16 @@
 #
 # ///////////////////////////////////////////////////////////
 
+cd "$(dirname "$0")" || exit 1
+
+# Platypus streams script stdout into the WebView. After a long-running
+# crunch.py call, concatenated HTML documents are not reliably applied;
+# force WebKit to load the next page from the app Resources directory.
+show_page() {
+    printf '%s\n' \
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><script>location.replace('$1');</script></head><body></body></html>"
+}
+
 # UNCOMMENT FOR TESTING ONLY
 # python crunch.py --gui "$@"
 # exit 0
@@ -27,23 +37,13 @@ fi
 
 cat execution.html
 
-if ./crunch.py --gui "$@" >/dev/null 2>&1; then
-    cat clear.html
-    cat complete-success.html
-    sleep 2
-    cat clear.html
-    cat start.html
-    sleep 0.8
-    cat waiting.html
+if ./crunch.py --gui "$@" >>/dev/null 2>>"${HOME}/.local/state/crunch/crunch.log"; then
+    show_page "complete-success.html"
+    # Stay alive while success page plays and redirects to waiting.html
+    sleep 3
     exit 0
 else
-    sleep 0.6
-    cat clear.html
-    cat complete-error.html
-    sleep 2
-    cat clear.html
-    cat start.html
-    sleep 0.8
-    cat waiting.html
+    show_page "complete-error.html"
+    sleep 3
     exit 1
 fi

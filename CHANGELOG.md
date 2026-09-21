@@ -1,5 +1,11 @@
 ## Changelog
 
+### v6.4.0
+
+- Fix GUI WebView stuck on `execution.html` after crunch finishes (Platypus navigation via `location.replace`)
+- Simplify `crunch-gui.sh` post-run flow; success/error pages auto-return to `waiting.html`
+- `crunch-gui.sh` runs from app Resources directory; GUI stderr appended to `~/.local/state/crunch/crunch.log`
+
 ### v6.3.2
 
 - Shrink GUI window: set WebView frame to 390×190 in `MainMenu.nib` (was 400×200)
