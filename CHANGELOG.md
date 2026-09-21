@@ -1,5 +1,10 @@
 ## Changelog
 
+### v6.3.2
+
+- Shrink GUI window: set WebView frame to 390×190 in `MainMenu.nib` (was 400×200)
+- `make sync-app` compiles `profile/MainMenu.nib/designable.nib` into the app bundle
+
 ### v6.3.1
 
 - Pre-commit hook runs `lint-python` / `lint-shell` only (black + shellcheck, not pytest)

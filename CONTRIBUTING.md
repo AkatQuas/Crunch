@@ -68,7 +68,7 @@ Contributions are warmly welcomed! This guide outlines how to set up your develo
 The GUI app bundle lives in `bin/Crunch.app`. Source changes go in `src/`; sync into the bundle before packaging:
 
 ```bash
-make sync-app
+make sync-app   # also compiles MainMenu.nib (390×190 WebView) via ibtool
 ```
 
 **Local DMG** (development):

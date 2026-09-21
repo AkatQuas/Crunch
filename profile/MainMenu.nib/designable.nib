@@ -597,10 +597,10 @@ Gw
         </window>
         <window allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="WebViewWindow" animationBehavior="default" tabbingMode="disallowed" id="247" userLabel="WebOutputWindow">
             <windowStyleMask key="styleMask" titled="YES" miniaturizable="YES"/>
-            <rect key="contentRect" x="297" y="408" width="419" height="261"/>
+            <rect key="contentRect" x="297" y="408" width="409" height="251"/>
             <rect key="screenRect" x="0.0" y="0.0" width="1920" height="1175"/>
             <view key="contentView" id="248">
-                <rect key="frame" x="0.0" y="0.0" width="419" height="261"/>
+                <rect key="frame" x="0.0" y="0.0" width="409" height="251"/>
                 <autoresizingMask key="autoresizingMask"/>
                 <subviews>
                     <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="251">
@@ -618,14 +618,14 @@ Gw
                         </connections>
                     </button>
                     <box fixedFrame="YES" boxType="oldStyle" borderType="line" titlePosition="noTitle" translatesAutoresizingMaskIntoConstraints="NO" id="257">
-                        <rect key="frame" x="8" y="45" width="402" height="202"/>
+                        <rect key="frame" x="8" y="45" width="392" height="192"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <view key="contentView" id="X4z-hY-QR7">
-                            <rect key="frame" x="1" y="1" width="400" height="200"/>
+                            <rect key="frame" x="1" y="1" width="390" height="190"/>
                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                             <subviews>
                                 <webView fixedFrame="YES" maintainsBackForwardList="NO" translatesAutoresizingMaskIntoConstraints="NO" id="258" customClass="STDragWebView">
-                                    <rect key="frame" x="-1" y="0.0" width="401" height="200"/>
+                                    <rect key="frame" x="0.0" y="0.0" width="390" height="190"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <webPreferences key="preferences" defaultFontSize="12" defaultFixedFontSize="12" javaEnabled="NO">
                                         <nil key="identifier"/>
