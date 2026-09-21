@@ -26,7 +26,12 @@ build-macos-icns:
 	sips -z 1024 1024   img/Crunch-icon-3.png --out img/CrunchIcon.iconset/icon_512x512@2x.png
 	cd img && iconutil -c icns CrunchIcon.iconset
 
-build-macos-installer: ## create fast dmg during development
+sync-app: ## copy source into bin/Crunch.app before packaging or release
+	cp src/crunch.py bin/Crunch.app/Contents/Resources/crunch.py
+	cp src/crunch-gui.sh bin/Crunch.app/Contents/Resources/script
+	cp html/*.html bin/Crunch.app/Contents/Resources/
+
+build-macos-installer: sync-app ## create fast dmg during development
 	# https://github.com/sindresorhus/create-dmg
 	-rm bin/*.dmg
 	-cd bin && npx -y create-dmg --no-code-sign Crunch.app
@@ -91,11 +96,11 @@ clean:
 benchmark:
 	cd benchmarks && $(MAKE) $@
 
-dist:
+dist: sync-app
 	./dmg-builder.sh
 
 dist-homebrew:
 	cask-repair crunch
 
 
-.PHONY: benchmark build-dependencies build-macos-icns build-macos-installer install-python-deps install-executable install-macos-service uninstall-dependencies uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist dist-homebrew clean
+.PHONY: benchmark build-dependencies build-macos-icns build-macos-installer sync-app install-python-deps install-executable install-macos-service uninstall-dependencies uninstall-executable uninstall-macos-service test test-coverage test-python test-shell test-valid-png-output dist dist-homebrew clean

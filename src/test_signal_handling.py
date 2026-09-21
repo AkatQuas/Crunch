@@ -84,8 +84,16 @@ def test_run_subprocess_with_shell_command():
 # ///////////////////////////////////////////////////////
 
 
-def test_signal_handler_function_exists():
-    """Test that signal_handler function exists and is callable."""
+def test_process_runner_registers_signal_handlers():
+    """Test that ProcessRunner installs interrupt handlers."""
+    runner = src.crunch.ProcessRunner.register_handlers()
+    assert isinstance(runner, src.crunch.ProcessRunner)
+    assert signal.getsignal(signal.SIGINT) == runner._handle_signal
+    assert signal.getsignal(signal.SIGTERM) == runner._handle_signal
+
+
+def test_signal_handler_delegates_to_process_runner():
+    """Backward-compatible signal_handler entry point still exists."""
     assert callable(src.crunch.signal_handler)
     assert src.crunch.signal_handler.__name__ == "signal_handler"
 
@@ -95,16 +103,10 @@ def test_pool_global_variable_exists():
     assert hasattr(src.crunch, 'pool')
 
 
-def test_signal_handler_uses_correct_exit_code():
-    """Test that signal_handler calculates exit code correctly.
-
-    Exit code = 128 + signal number (SIGINT=2, SIGTERM=15)
-    """
-    import src.crunch
-
-    source = inspect.getsource(src.crunch.signal_handler)
-    # Should use 128 + signum
-    assert '128 + signum' in source
+def test_process_runner_uses_correct_exit_code():
+    """Exit code = 128 + signal number (SIGINT=2, SIGTERM=15)."""
+    source = inspect.getsource(src.crunch.ProcessRunner._handle_signal)
+    assert "128 + signum" in source
 
 
 if __name__ == "__main__":

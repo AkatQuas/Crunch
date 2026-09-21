@@ -21,18 +21,77 @@ import struct
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
+from enum import Enum
 from multiprocessing import Lock, Pool, cpu_count
 from subprocess import CalledProcessError
+from typing import Dict, List, Optional
 
 # Global lock declarations (initialized via lock_init for worker processes)
 stdstream_lock = None
 logging_lock = None
 
-# Global pool reference for signal handling
+# Active execution context (set in main / worker initializer)
+_ctx = None
+
+# Global pool reference kept for tests; owned by ProcessRunner during batch runs
 pool = None
 
+_process_runner = None
+
+
+class ExecutionMode(Enum):
+    CLI = "cli"
+    GUI = "gui"
+    SERVICE = "service"
+
+    @classmethod
+    def from_argv(cls, arglist):
+        if "--gui" in arglist:
+            return cls.GUI
+        if "--service" in arglist:
+            return cls.SERVICE
+        return cls.CLI
+
+    @property
+    def is_gui(self):
+        return self in (ExecutionMode.GUI, ExecutionMode.SERVICE)
+
+
+@dataclass
+class ExecutionContext:
+    mode: ExecutionMode
+    output_paths: Dict[str, Optional[str]]
+    pngquant_path: str
+    zopflipng_path: str
+    stdstream_lock: object = None
+    logging_lock: object = None
+
+    @property
+    def is_gui_mode(self):
+        return self.mode.is_gui
+
+    def error_string(self):
+        if not self.is_gui_mode:
+            return "[ " + format_ansi_red("!") + " ]"
+        return "[ ! ]"
+
+    def get_output_path(self, input_path):
+        return self.output_paths.get(input_path)
+
+
+@dataclass
+class RunRequest:
+    """Parsed CLI/GUI request ready for the optimization engine."""
+
+    mode: ExecutionMode
+    png_paths: List[str]
+    output_paths: Dict[str, Optional[str]]
+    error_string: str
+
+
 # Application Constants
-VERSION = "6.2.0"
+VERSION = "6.3.0"
 VERSION_STRING = "crunch v" + VERSION
 
 # Processor Constant
@@ -61,6 +120,48 @@ CRUNCH_DOT_DIRECTORY = os.path.join(
 
 # Log File Path
 LOGFILE_PATH = os.path.join(CRUNCH_DOT_DIRECTORY, "crunch.log")
+
+
+def resolve_dependency_paths(mode):
+    if mode == ExecutionMode.GUI:
+        return "./pngquant", "./zopflipng"
+    return PNGQUANT_CLI_PATH, ZOPFLIPNG_CLI_PATH
+
+
+def get_dependency_paths(mode=None):
+    """Single seam for pngquant/zopflipng path resolution by execution mode."""
+    if mode is not None:
+        return resolve_dependency_paths(mode)
+    if _ctx is not None:
+        return _ctx.pngquant_path, _ctx.zopflipng_path
+    return resolve_dependency_paths(_infer_mode_without_context())
+
+
+def _infer_mode_without_context():
+    if GUI_MODE:
+        if "--service" in sys.argv:
+            return ExecutionMode.SERVICE
+        return ExecutionMode.GUI
+    return ExecutionMode.from_argv(sys.argv[1:])
+
+
+def _execution_context_for_mode(mode, output_paths=None):
+    pngquant_path, zopflipng_path = get_dependency_paths(mode)
+    return ExecutionContext(
+        mode=mode,
+        output_paths=output_paths if output_paths is not None else OUTPUT_PATHS,
+        pngquant_path=pngquant_path,
+        zopflipng_path=zopflipng_path,
+        stdstream_lock=stdstream_lock,
+        logging_lock=logging_lock,
+    )
+
+
+def _resolve_context():
+    if _ctx is not None:
+        return _ctx
+    return _execution_context_for_mode(_infer_mode_without_context())
+
 
 HELP_STRING = """
 ==================================================
@@ -107,128 +208,53 @@ Options:
 """
 
 
-def signal_handler(signum, frame):
-    """Handle SIGINT (Ctrl+C) to terminate all child processes with full cleanup."""
-    # Ignore this signal to prevent recursion when we send SIGTERM to our process group
-    signal.signal(signum, signal.SIG_IGN)
-
-    import sys
-
-    sys.stderr.write("\nReceived interrupt signal. Terminating all processes...\n")
-    sys.stderr.flush()
-
-    # Terminate the multiprocessing pool if it exists
-    global pool
-    if pool is not None:
-        try:
-            pool.terminate()
-            pool.join()
-            pool.close()
-        except Exception:
-            pass
-        finally:
-            pool = None  # CRITICAL: Clear global reference to eliminate tracker leaks
-
-    # Also kill any remaining child processes in our process group
-    # This catches stray pngquant/zopflipng processes that may have
-    # not been properly cleaned up by the pool
-    try:
-        # Get our process group
-        my_pid = os.getpid()
-        pgid = os.getpgid(my_pid)
-        # Only kill if we're the process group leader (to avoid killing parent)
-        if pgid == my_pid:
-            os.killpg(pgid, signal.SIGTERM)
-    except (OSError, ProcessLookupError):
-        # Process group may not exist or we may not have permission
-        pass
-
-    # Use os._exit() instead of sys.exit() to avoid any cleanup that might
-    # trigger more signals. This is the proper way to exit from a signal handler.
-    # Exit code = 128 + signal number (standard Unix convention)
-    exit_code = 128 + signum
-    os._exit(exit_code)
-
-
-def main(argv):
-    global GUI_MODE
-    GUI_MODE = is_gui(argv)
-
-    # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    # Create config directory
-    if not os.path.isdir(CRUNCH_DOT_DIRECTORY):
-        os.makedirs(CRUNCH_DOT_DIRECTORY)
-    # Log entries are appended to the file on every script execution
-    # (see log_error and log_info functions below)
-
-    # ////////////////////////
-    # ANSI COLOR DEFINITIONS
-    # ////////////////////////
-    if not GUI_MODE:
-        ERROR_STRING = "[ " + format_ansi_red("!") + " ]"
-    else:
-        ERROR_STRING = "[ ! ]"
-
+def _parse_run_request(argv):
+    """CLI adapter: parse argv into a RunRequest, or exit for meta commands."""
     argv = argv if len(argv) > 0 else ["-h"]
-    # //////////////////////////////////////
-    # HELP, USAGE, VERSION option handling
-    # //////////////////////////////////////
+    mode = ExecutionMode.from_argv(argv)
+    error_string = _execution_context_for_mode(mode, output_paths={}).error_string()
+
     if argv[0] in ("-v", "--version"):
         print(VERSION_STRING)
         sys.exit(0)
-    elif argv[0] in ("-h", "--help"):
+    if argv[0] in ("-h", "--help"):
         print(HELP_STRING)
         sys.exit(0)
-    elif argv[0] == "--usage":
+    if argv[0] == "--usage":
         print(USAGE)
         sys.exit(0)
-    elif argv[0] in ("-l", "--log"):
+    if argv[0] in ("-l", "--log"):
         num_lines = 200
         if len(argv) > 1:
             try:
                 num_lines = int(argv[1])
             except ValueError:
                 sys.stderr.write(
-                    f"{ERROR_STRING} Invalid argument '{argv[1]}' for --log. "
+                    f"{error_string} Invalid argument '{argv[1]}' for --log. "
                     f"Please provide a valid integer for number of lines.{os.linesep}"
                 )
                 sys.exit(1)
         print_log(num_lines)
         sys.exit(0)
 
-    output_option, argv = parse_cli_options(argv, ERROR_STRING)
-    if output_option and GUI_MODE:
+    output_option, argv = parse_cli_options(argv, error_string)
+    if output_option and mode.is_gui:
         sys.stderr.write(
-            f"{ERROR_STRING} --output / -o flag is not supported in GUI or Service "
+            f"{error_string} --output / -o flag is not supported in GUI or Service "
             f"mode.{os.linesep}"
         )
         sys.exit(1)
 
-    # ////////////////////////
-    # DEFINE DEPENDENCY PATHS
-    # ////////////////////////
-    PNGQUANT_EXE_PATH = get_pngquant_path()
-    ZOPFLIPNG_EXE_PATH = get_zopflipng_path()
-
-    # ////////////////////
-    # PARSE PNG_PATH_LIST
-    # ////////////////////
-
-    if GUI_MODE:
+    if mode.is_gui:
         png_path_list = argv[1:]
-        # Argument check
         if len(png_path_list) == 0:
             sys.stderr.write(
-                f"{ERROR_STRING} Please include one or more paths to PNG image files as "
-                "arguments to the script.{os.linesep}"
+                f"{error_string} Please include one or more paths to PNG image files as "
+                f"arguments to the script.{os.linesep}"
             )
             sys.exit(1)
     else:
         png_path_list = argv
-        # If single folder argument provided, expand to all PNG files in that folder
         if len(png_path_list) == 1 and os.path.isdir(png_path_list[0]):
             folder_path = png_path_list[0]
             png_path_list = []
@@ -238,29 +264,25 @@ def main(argv):
                         png_path_list.append(os.path.join(root, filename))
             if not png_path_list:
                 sys.stderr.write(
-                    f"{ERROR_STRING} No PNG files found in folder '{folder_path}'.{os.linesep}"
+                    f"{error_string} No PNG files found in folder '{folder_path}'."
+                    f"{os.linesep}"
                 )
                 sys.exit(1)
 
-    # //////////////////////////////////
-    # COMMAND LINE ERROR HANDLING
-    # //////////////////////////////////
-
-    # Filter out invalid paths and continue with valid ones
     valid_png_paths = []
     for png_path in png_path_list:
         if not os.path.isfile(png_path):
             sys.stderr.write(
-                f"{ERROR_STRING} '{png_path}' does not appear to be a "
+                f"{error_string} '{png_path}' does not appear to be a "
                 f"valid path to a PNG file. Skipping...{os.linesep}"
             )
             continue
-        # PNG validity test
         if not is_valid_png(png_path):
             sys.stderr.write(
-                f"{ERROR_STRING} '{png_path}' is not a valid PNG file. Skipping...{os.linesep}"
+                f"{error_string} '{png_path}' is not a valid PNG file. Skipping..."
+                f"{os.linesep}"
             )
-            if GUI_MODE:
+            if mode.is_gui:
                 log_error(f"{png_path} is not a valid PNG file. Skipping...")
             continue
         valid_png_paths.append(png_path)
@@ -270,34 +292,70 @@ def main(argv):
             f"No valid PNG files found. Please try again "
             f"with one or more valid PNG files.{os.linesep}"
         )
-        if GUI_MODE:
+        if mode.is_gui:
             log_error("No valid PNG files found.")
         sys.exit(1)
 
-    png_path_list = valid_png_paths
+    output_paths = build_output_paths(valid_png_paths, output_option, error_string)
+    return RunRequest(
+        mode=mode,
+        png_paths=valid_png_paths,
+        output_paths=output_paths,
+        error_string=error_string,
+    )
 
-    global OUTPUT_PATHS
-    OUTPUT_PATHS = build_output_paths(png_path_list, output_option, ERROR_STRING)
+
+def main(argv):
+    global GUI_MODE, _ctx, OUTPUT_PATHS, _process_runner
+
+    _ctx = None
+    ProcessRunner.register_handlers()
+
+    if not os.path.isdir(CRUNCH_DOT_DIRECTORY):
+        os.makedirs(CRUNCH_DOT_DIRECTORY)
+
+    request = _parse_run_request(argv)
+    GUI_MODE = request.mode.is_gui
+    OUTPUT_PATHS = request.output_paths
+
+    execution_context = _execution_context_for_mode(
+        request.mode, output_paths=request.output_paths
+    )
+    _ctx = execution_context
+
+    try:
+        _run_optimization(execution_context, request.png_paths, request.error_string)
+    finally:
+        _ctx = None
+
+    if GUI_MODE:
+        log_info("Crunch execution ended.")
+    sys.exit(0)
+
+
+def _run_optimization(execution_context, png_path_list, error_string):
+    pngquant_exe_path = execution_context.pngquant_path
+    zopflipng_exe_path = execution_context.zopflipng_path
 
     # Dependency check
-    if not os.path.exists(PNGQUANT_EXE_PATH):
+    if not os.path.exists(pngquant_exe_path):
         sys.stderr.write(
-            f"{ERROR_STRING} pngquant executable was not identified on path "
-            f"'{PNGQUANT_EXE_PATH}'{os.linesep}"
+            f"{error_string} pngquant executable was not identified on path "
+            f"'{pngquant_exe_path}'{os.linesep}"
         )
-        if GUI_MODE:
+        if execution_context.is_gui_mode:
             log_error(
-                f"pngquant was not found on the expected path {PNGQUANT_EXE_PATH}"
+                f"pngquant was not found on the expected path {pngquant_exe_path}"
             )
         sys.exit(1)
-    elif not os.path.exists(ZOPFLIPNG_EXE_PATH):
+    elif not os.path.exists(zopflipng_exe_path):
         sys.stderr.write(
-            f"{ERROR_STRING} zopflipng executable was not identified on path "
-            f"'{ZOPFLIPNG_EXE_PATH}'{os.linesep}"
+            f"{error_string} zopflipng executable was not identified on path "
+            f"'{zopflipng_exe_path}'{os.linesep}"
         )
-        if GUI_MODE:
+        if execution_context.is_gui_mode:
             log_error(
-                f"zopflipng was not found on the expected path {ZOPFLIPNG_EXE_PATH}"
+                f"zopflipng was not found on the expected path {zopflipng_exe_path}"
             )
         sys.exit(1)
 
@@ -306,68 +364,7 @@ def main(argv):
     # ////////////////////////////////////
     print("Crunching ...")
 
-    ss_lock = Lock()
-    log_lock = Lock()
-
-    if len(png_path_list) == 1:
-        # the global locks are not necessary for single file processing
-        # but must be instantiated because the logging functions are
-        # used for single and multi-process execution
-        lock_init(ss_lock, log_lock, OUTPUT_PATHS, GUI_MODE)
-        # there is only one PNG file, skip spawning of processes and just optimize it
-        optimize_png(png_path_list[0])
-    else:
-        processes = PROCESSES
-        # if not defined by user, start by defining spawned processes as number
-        # of available cores
-        if processes == 0:
-            processes = cpu_count()
-
-        # if total cores available is greater than number of files requested,
-        # limit to the latter number
-        if processes > len(png_path_list):
-            processes = len(png_path_list)
-
-        print(
-            f"Spawning {processes} processes to optimize {len(png_path_list)} "
-            f"image files..."
-        )
-
-        # create multiprocessing pool with global locks
-        # based on approach described in https://stackoverflow.com/a/25558333/2848172
-        # to address shared memory leak described in
-        # https://github.com/chrissimpkins/Crunch/issues/100
-        global pool
-        try:
-            pool = Pool(
-                processes,
-                initializer=lock_init,
-                initargs=(ss_lock, log_lock, OUTPUT_PATHS, GUI_MODE),
-            )
-            pool.map(optimize_png, png_path_list)
-        except Exception as e:
-            # Release locks if stuck
-            if stdstream_lock and stdstream_lock.acquire(block=False):
-                stdstream_lock.release()
-            sys.stderr.write(f"-----{os.linesep}")
-            sys.stderr.write(
-                f"{ERROR_STRING} Error detected during execution." f"{os.linesep}"
-            )
-            sys.stderr.write(f"{e}{os.linesep}")
-            if GUI_MODE:
-                log_error(str(e))
-            sys.exit(1)
-        finally:
-            # CRITICAL CLEANUP: Fixes semaphore leak
-            if pool is not None:
-                pool.close()
-                pool.join()
-                pool = None
-
-    # Exit successfully
-    if GUI_MODE:
-        log_info("Crunch execution ended.")
-    sys.exit(0)
+    ProcessRunner.active().run(execution_context, error_string, optimize_png, png_path_list)
 
 
 # ///////////////////////
@@ -376,140 +373,8 @@ def main(argv):
 
 
 def optimize_png(png_path):
-    img = ImageFile(png_path)
-
-    # define pngquant and zopflipng paths
-    PNGQUANT_EXE_PATH = get_pngquant_path()
-    ZOPFLIPNG_EXE_PATH = get_zopflipng_path()
-
-    # ////////////////////////
-    # ANSI COLOR DEFINITIONS
-    # ////////////////////////
-    if not GUI_MODE:
-        ERROR_STRING = "[ " + format_ansi_red("!") + " ]"
-    else:
-        ERROR_STRING = "[ ! ]"
-
-    # --------------
-    # pngquant stage
-    # --------------
-    pngquant_options = f" --quality=80-98 --skip-if-larger --force --strip --speed 1 --ext {img.post_suffix} "
-    pngquant_command = (
-        PNGQUANT_EXE_PATH + pngquant_options + shellquote(img.pre_filepath)
-    )
-    try:
-        run_subprocess(pngquant_command)
-    except CalledProcessError as cpe:
-        if cpe.returncode == 98:
-            # this is the status code when file size increases with execution of pngquant.
-            # ignore at this stage, original file copied at beginning of zopflipng
-            # processing below if it is not present due to these errors
-            pass
-        elif cpe.returncode == 99:
-            # this is the status code when the image quality falls below the set min value
-            # ignore at this stage, original lfile copied at beginning of zopflipng
-            # processing below if it is not present to these errors
-            pass
-        else:
-            if stdstream_lock:
-                stdstream_lock.acquire()
-            sys.stderr.write(
-                f"{ERROR_STRING} {img.pre_filepath} processing failed at pngquant stage.{os.linesep}"
-            )
-            if stdstream_lock:
-                stdstream_lock.release()
-            if GUI_MODE:
-                log_error(
-                    f"{img.pre_filepath} processing failed at pngquant stage."
-                    f"{os.linesep}{cpe}"
-                )
-                return None
-            else:
-                raise cpe
-    except Exception as e:
-        if GUI_MODE:
-            log_error(
-                f"{img.pre_filepath} processing failed at pngquant stage."
-                f"{os.linesep}{e}"
-            )
-            return None
-        else:
-            raise e
-
-    # ---------------
-    # zopflipng stage
-    # ---------------
-    # use --filters=0 by default for quantized PNG files (based upon testing by CS)
-    zopflipng_options = " -y --filters=0 "
-    # confirm that a file with proper path was generated by pngquant
-    # pngquant does not write expected file path if the file was larger after processing
-    if not os.path.exists(img.post_filepath):
-        shutil.copy(img.pre_filepath, img.post_filepath)
-        # If pngquant did not quantize the file, permit zopflipng to attempt compression
-        # with mulitple filters.  This achieves better compression than the default
-        # approach for non-quantized PNG files, but takes significantly longer
-        # (based upon testing by CS)
-        zopflipng_options = " -y --lossy_transparent "
-    zopflipng_command = (
-        ZOPFLIPNG_EXE_PATH
-        + zopflipng_options
-        + shellquote(img.post_filepath)
-        + " "
-        + shellquote(img.post_filepath)
-    )
-    try:
-        run_subprocess(zopflipng_command)
-    except CalledProcessError as cpe:
-        if stdstream_lock:
-            stdstream_lock.acquire()
-        sys.stderr.write(
-            f"{ERROR_STRING} {img.pre_filepath} processing failed at zopflipng stage.{os.linesep}"
-        )
-        if stdstream_lock:
-            stdstream_lock.release()
-        if GUI_MODE:
-            log_error(
-                f"{img.pre_filepath} processing failed at zopflipng stage."
-                f"{os.linesep}{cpe}"
-            )
-            return None
-        else:
-            raise cpe
-    except Exception as e:
-        if GUI_MODE:
-            log_error(
-                f"{img.pre_filepath} processing failed at zopflipng stage."
-                f"{os.linesep}{e}"
-            )
-            return None
-        else:
-            raise e
-
-    img.get_post_filesize()
-    percent = img.get_compression_percent()
-
-    # CLI mode: replace original or move to --output path
-    if not GUI_MODE:
-        img.finalize_output()
-
-    percent_string = "{0:.2f}%".format(percent)
-    # if compression occurred, color the percent string green
-    # otherwise, leave it default text color
-    if not GUI_MODE and percent < 100:
-        percent_string = format_ansi_green(percent_string)
-
-    # report percent original file size / post file path / size (bytes) to
-    # stdout (command line executable)
-    if stdstream_lock:
-        stdstream_lock.acquire()
-    print(f"[ {percent_string} ] {img.post_filepath} ({img.post_size} bytes)")
-    if stdstream_lock:
-        stdstream_lock.release()
-
-    # report percent original file size / post file path / size (bytes) to log file
-    # (macOS GUI + right-click service)
-    if GUI_MODE:
-        log_info(f"[ {percent_string} ] {img.post_filepath} ({img.post_size} bytes)")
+    # pool.map must not receive return values that reference process locks
+    _optimizer.optimize(png_path)
 
 
 def run_subprocess(command):
@@ -623,25 +488,15 @@ def fix_filepath_args(args):
 
 
 def get_pngquant_path():
-    if len(sys.argv) > 1 and sys.argv[1] == "--gui":
-        return "./pngquant"
-    elif len(sys.argv) > 1 and sys.argv[1] == "--service":
-        return "/Applications/Crunch.app/Contents/Resources/pngquant"
-    else:
-        return PNGQUANT_CLI_PATH
+    return get_dependency_paths()[0]
 
 
 def get_zopflipng_path():
-    if len(sys.argv) > 1 and sys.argv[1] == "--gui":
-        return "./zopflipng"
-    elif len(sys.argv) > 1 and sys.argv[1] == "--service":
-        return "/Applications/Crunch.app/Contents/Resources/zopflipng"
-    else:
-        return ZOPFLIPNG_CLI_PATH
+    return get_dependency_paths()[1]
 
 
 def is_gui(arglist):
-    return "--gui" in arglist or "--service" in arglist
+    return ExecutionMode.from_argv(arglist).is_gui
 
 
 def is_valid_png(filepath):
@@ -654,18 +509,22 @@ def is_valid_png(filepath):
     return signature == expected_signature
 
 
-def lock_init(ss_lock, log_lock, output_paths=None, gui_mode=False):
+def lock_init(ss_lock, log_lock, context):
     # Based on approach described in
     # https://stackoverflow.com/a/25558333/2848172
     global stdstream_lock
     global logging_lock
     global OUTPUT_PATHS
     global GUI_MODE
+    global _ctx
 
+    context.stdstream_lock = ss_lock
+    context.logging_lock = log_lock
+    _ctx = context
     stdstream_lock = ss_lock
     logging_lock = log_lock
-    OUTPUT_PATHS = output_paths or {}
-    GUI_MODE = gui_mode
+    OUTPUT_PATHS = context.output_paths
+    GUI_MODE = context.is_gui_mode
 
 
 def log_error(errmsg):
@@ -733,8 +592,225 @@ def format_ansi_green(text):
 # ///////////////////////
 
 
+class ProcessRunner(object):
+    """Owns signal handling, pool lifecycle, and worker context initialization."""
+
+    def __init__(self):
+        self._pool = None
+
+    @classmethod
+    def register_handlers(cls):
+        global _process_runner
+        _process_runner = cls()
+        signal.signal(signal.SIGINT, _process_runner._handle_signal)
+        signal.signal(signal.SIGTERM, _process_runner._handle_signal)
+        return _process_runner
+
+    @classmethod
+    def active(cls):
+        if _process_runner is None:
+            return cls.register_handlers()
+        return _process_runner
+
+    def _handle_signal(self, signum, frame):
+        signal.signal(signum, signal.SIG_IGN)
+        sys.stderr.write(
+            "\nReceived interrupt signal. Terminating all processes...\n"
+        )
+        sys.stderr.flush()
+        self._terminate_pool()
+        self._kill_process_group()
+        os._exit(128 + signum)
+
+    def _terminate_pool(self):
+        global pool
+        if self._pool is not None:
+            try:
+                self._pool.terminate()
+                self._pool.join()
+                self._pool.close()
+            except Exception:
+                pass
+            finally:
+                self._pool = None
+                pool = None
+
+    @staticmethod
+    def _kill_process_group():
+        try:
+            my_pid = os.getpid()
+            pgid = os.getpgid(my_pid)
+            if pgid == my_pid:
+                os.killpg(pgid, signal.SIGTERM)
+        except (OSError, ProcessLookupError):
+            pass
+
+    def run(self, execution_context, error_string, work_fn, png_path_list):
+        ss_lock = Lock()
+        log_lock = Lock()
+
+        if len(png_path_list) == 1:
+            lock_init(ss_lock, log_lock, execution_context)
+            work_fn(png_path_list[0])
+            return
+
+        processes = PROCESSES or cpu_count()
+        if processes > len(png_path_list):
+            processes = len(png_path_list)
+
+        print(
+            f"Spawning {processes} processes to optimize {len(png_path_list)} "
+            f"image files..."
+        )
+
+        global pool
+        try:
+            self._pool = Pool(
+                processes,
+                initializer=lock_init,
+                initargs=(ss_lock, log_lock, execution_context),
+            )
+            pool = self._pool
+            self._pool.map(work_fn, png_path_list)
+        except Exception as e:
+            if stdstream_lock and stdstream_lock.acquire(block=False):
+                stdstream_lock.release()
+            sys.stderr.write(f"-----{os.linesep}")
+            sys.stderr.write(
+                f"{error_string} Error detected during execution.{os.linesep}"
+            )
+            sys.stderr.write(f"{e}{os.linesep}")
+            if execution_context.is_gui_mode:
+                log_error(str(e))
+            sys.exit(1)
+        finally:
+            if self._pool is not None:
+                self._pool.close()
+                self._pool.join()
+                self._pool = None
+                pool = None
+
+
+def signal_handler(signum, frame):
+    """Backward-compatible delegate to ProcessRunner signal handling."""
+    ProcessRunner.active()._handle_signal(signum, frame)
+
+
+class PngOptimizer(object):
+    """Deep module: pngquant → zopflipng pipeline with injectable subprocess seam."""
+
+    PNGQUANT_IGNORE_CODES = (98, 99)
+
+    def __init__(self, subprocess_runner=None):
+        self._run_subprocess = subprocess_runner or run_subprocess
+
+    def optimize(self, png_path):
+        ctx = _resolve_context()
+        img = ImageFile(png_path, ctx)
+
+        if not self._run_pngquant_stage(img, ctx):
+            return None
+        if not self._run_zopflipng_stage(img, ctx):
+            return None
+
+        img.get_post_filesize()
+        percent = img.get_compression_percent()
+
+        if not ctx.is_gui_mode:
+            img.finalize_output()
+
+        self._report_result(img, ctx, percent)
+        return img
+
+    def _build_pngquant_command(self, img, ctx):
+        options = (
+            f" --quality=80-98 --skip-if-larger --force --strip --speed 1 "
+            f"--ext {img.post_suffix} "
+        )
+        return ctx.pngquant_path + options + shellquote(img.pre_filepath)
+
+    def _build_zopflipng_command(self, img, ctx):
+        # use --filters=0 by default for quantized PNG files (based upon testing by CS)
+        options = " -y --filters=0 "
+        if not os.path.exists(img.post_filepath):
+            shutil.copy(img.pre_filepath, img.post_filepath)
+            # If pngquant did not quantize the file, permit zopflipng to attempt compression
+            # with mulitple filters.  This achieves better compression than the default
+            # approach for non-quantized PNG files, but takes significantly longer
+            # (based upon testing by CS)
+            options = " -y --lossy_transparent "
+        return (
+            ctx.zopflipng_path
+            + options
+            + shellquote(img.post_filepath)
+            + " "
+            + shellquote(img.post_filepath)
+        )
+
+    def _run_pngquant_stage(self, img, ctx):
+        try:
+            self._run_subprocess(self._build_pngquant_command(img, ctx))
+        except CalledProcessError as cpe:
+            if cpe.returncode in self.PNGQUANT_IGNORE_CODES:
+                return True
+            return self._handle_stage_failure(ctx, img, "pngquant", cpe)
+        except Exception as exc:
+            return self._handle_stage_failure(ctx, img, "pngquant", exc)
+        return True
+
+    def _run_zopflipng_stage(self, img, ctx):
+        try:
+            self._run_subprocess(self._build_zopflipng_command(img, ctx))
+        except CalledProcessError as cpe:
+            return self._handle_stage_failure(ctx, img, "zopflipng", cpe)
+        except Exception as exc:
+            return self._handle_stage_failure(ctx, img, "zopflipng", exc)
+        return True
+
+    def _handle_stage_failure(self, ctx, img, stage, exc):
+        error_string = ctx.error_string()
+        self._write_stage_error(ctx, error_string, img, stage)
+        if ctx.is_gui_mode:
+            log_error(
+                f"{img.pre_filepath} processing failed at {stage} stage."
+                f"{os.linesep}{exc}"
+            )
+            return False
+        raise exc
+
+    def _write_stage_error(self, ctx, error_string, img, stage):
+        if ctx.stdstream_lock:
+            ctx.stdstream_lock.acquire()
+        sys.stderr.write(
+            f"{error_string} {img.pre_filepath} processing failed at "
+            f"{stage} stage.{os.linesep}"
+        )
+        if ctx.stdstream_lock:
+            ctx.stdstream_lock.release()
+
+    def _report_result(self, img, ctx, percent):
+        percent_string = "{0:.2f}%".format(percent)
+        if not ctx.is_gui_mode and percent < 100:
+            percent_string = format_ansi_green(percent_string)
+
+        if ctx.stdstream_lock:
+            ctx.stdstream_lock.acquire()
+        print(f"[ {percent_string} ] {img.post_filepath} ({img.post_size} bytes)")
+        if ctx.stdstream_lock:
+            ctx.stdstream_lock.release()
+
+        if ctx.is_gui_mode:
+            log_info(
+                f"[ {percent_string} ] {img.post_filepath} ({img.post_size} bytes)"
+            )
+
+
+_optimizer = PngOptimizer()
+
+
 class ImageFile(object):
-    def __init__(self, filepath):
+    def __init__(self, filepath, context=None):
+        self._context = context
         self.pre_filepath = filepath
         self.post_filepath = self._get_post_filepath()
         self.post_suffix = self._get_post_suffix()
@@ -757,7 +833,10 @@ class ImageFile(object):
         if not os.path.exists(self.post_filepath):
             return
 
-        output_path = get_output_path(self.pre_filepath)
+        if self._context is not None:
+            output_path = self._context.get_output_path(self.pre_filepath)
+        else:
+            output_path = get_output_path(self.pre_filepath)
         if output_path is None:
             os.remove(self.pre_filepath)
             os.rename(self.post_filepath, self.pre_filepath)

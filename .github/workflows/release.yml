@@ -1,0 +1,91 @@
+name: Release macOS GUI
+
+# Maintainer flow:
+#   1. Bump VERSION in src/crunch.py and add a CHANGELOG.md section
+#   2. Push to main
+#   3. Run this workflow manually (Actions → Release macOS GUI → Run workflow)
+#
+# The workflow runs tests, syncs src/ into bin/Crunch.app, builds the DMG,
+# creates tag v{VERSION}, and publishes a GitHub Release with the installer.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from src/crunch.py
+        id: version
+        run: |
+          VERSION=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' src/crunch.py)
+          if [ -z "$VERSION" ]; then
+            echo "Could not read VERSION from src/crunch.py"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing version $VERSION (tag v$VERSION)"
+
+      - name: Verify CHANGELOG entry exists
+        run: |
+          grep -q "### v${{ steps.version.outputs.version }}" CHANGELOG.md || {
+            echo "Missing CHANGELOG.md section: ### v${{ steps.version.outputs.version }}"
+            exit 1
+          }
+
+      - name: Verify release tag is new
+        run: |
+          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.version.outputs.tag }} already exists"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest
+          brew install pngcheck
+
+      - name: Build pngquant and zopflipng
+        run: make build-dependencies
+
+      - name: Install CLI executable
+        run: make install-executable
+
+      - name: Run tests
+        run: |
+          pytest src
+          make test-valid-png-output
+
+      - name: Sync app bundle from source
+        run: make sync-app
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Build DMG installer
+        run: make dist
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Crunch ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            installer/Crunch-Installer.dmg
+            installer/Crunch-Installer-checksum.txt

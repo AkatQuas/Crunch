@@ -6,7 +6,9 @@
 - CLI replaces original PNG files in place by default
 - Add `-o` / `--output` for single-file alternate output paths
 - Remove `--replace` / `-r` flag (use default in-place behavior or `-o` instead)
-- Add `GUI_MODE` and `OUTPUT_PATHS` for reliable execution context in workers and tests
+- Refactor `crunch.py`: `ExecutionContext`, `PngOptimizer`, `ProcessRunner`, `_parse_run_request`
+- Unify dependency path resolution via `ExecutionMode` / `get_dependency_paths`
+- Add `make sync-app` and GitHub Actions release workflow for DMG publishing
 - Update docs, Makefile, and tests for new CLI output behavior
 
 ### v6.2.0

@@ -69,9 +69,10 @@ def test_crunch_bad_filepath_error(capsys):
 # ///////////////////////////////////////////////////////
 
 def test_crunch_missing_pngquant_error(capsys, monkeypatch):
-    def return_bogus_path():
-        return os.path.join("bogus", "pngquant")
-    monkeypatch.setattr(src.crunch, 'get_pngquant_path', return_bogus_path)
+    def fake_resolve(mode):
+        return os.path.join("bogus", "pngquant"), src.crunch.ZOPFLIPNG_CLI_PATH
+
+    monkeypatch.setattr(src.crunch, "resolve_dependency_paths", fake_resolve)
     testpath = os.path.join("testfiles", "robot.png")
     with pytest.raises(SystemExit) as exit_info:
         src.crunch.main([testpath])
@@ -82,9 +83,10 @@ def test_crunch_missing_pngquant_error(capsys, monkeypatch):
 
 
 def test_crunch_missing_zopflipng_error(capsys, monkeypatch):
-    def return_bogus_path():
-        return os.path.join("bogus", "zopflipng")
-    monkeypatch.setattr(src.crunch, 'get_zopflipng_path', return_bogus_path)
+    def fake_resolve(mode):
+        return src.crunch.PNGQUANT_CLI_PATH, os.path.join("bogus", "zopflipng")
+
+    monkeypatch.setattr(src.crunch, "resolve_dependency_paths", fake_resolve)
     testpath = os.path.join("testfiles", "robot.png")
     with pytest.raises(SystemExit) as exit_info:
         src.crunch.main([testpath])
@@ -173,9 +175,6 @@ def test_output_flag_missing_argument(capsys):
 
 def test_output_flag_not_allowed_with_multiple_files(capsys, monkeypatch):
     """Test that --output is rejected when multiple input files are provided."""
-    monkeypatch.setattr(src.crunch, "get_pngquant_path", lambda: "bogus_pngquant")
-    monkeypatch.setattr(src.crunch, "get_zopflipng_path", lambda: "bogus_zopflipng")
-
     with pytest.raises(SystemExit) as exit_info:
         src.crunch.main(
             ["-o", "out.png", "testfiles/robot.png", "testfiles/cat.png"]

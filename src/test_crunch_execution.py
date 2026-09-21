@@ -11,6 +11,20 @@ import pytest
 
 import src.crunch
 
+
+@pytest.fixture
+def cli_dependencies_for_gui_service(monkeypatch):
+    """Use installed CLI binaries when exercising GUI/Service execution modes."""
+    original = src.crunch.resolve_dependency_paths
+
+    def patched(mode):
+        if mode in (src.crunch.ExecutionMode.GUI, src.crunch.ExecutionMode.SERVICE):
+            return original(src.crunch.ExecutionMode.CLI)
+        return original(mode)
+
+    monkeypatch.setattr(src.crunch, "resolve_dependency_paths", patched)
+
+
 # ///////////////////////////////////////////////////////
 #
 # pytest capsys capture tests
@@ -133,7 +147,9 @@ def test_crunch_function_get_pngquant_path_service():
     preargs = sys.argv
     sys.argv = ["crunch.py", "--service", "test.png", "test2.png"]
     response = src.crunch.get_pngquant_path()
-    assert response == "/Applications/Crunch.app/Contents/Resources/pngquant"
+    assert response == os.path.join(
+        os.path.expanduser("~"), ".local", "bin", "pngquant"
+    )
     sys.argv = preargs
 
 
@@ -141,7 +157,9 @@ def test_crunch_function_get_zopflipng_path_service():
     preargs = sys.argv
     sys.argv = ["crunch.py", "--service", "test.png", "test2.png"]
     response = src.crunch.get_zopflipng_path()
-    assert response == "/Applications/Crunch.app/Contents/Resources/zopflipng"
+    assert response == os.path.join(
+        os.path.expanduser("~"), ".local", "bin", "zopflipng"
+    )
     sys.argv = preargs
 
 
@@ -236,8 +254,20 @@ def test_crunch_function_fix_filepath_args_two_nonpng_files():
 
 # optimize_png function
 
+def _gui_optimizer_context():
+    pngquant_path, zopflipng_path = src.crunch.get_dependency_paths(
+        src.crunch.ExecutionMode.CLI
+    )
+    return src.crunch.ExecutionContext(
+        mode=src.crunch.ExecutionMode.GUI,
+        output_paths={},
+        pngquant_path=pngquant_path,
+        zopflipng_path=zopflipng_path,
+    )
+
+
 def test_crunch_function_optimize_png_unoptimized_file(monkeypatch):
-    monkeypatch.setattr(src.crunch, "GUI_MODE", True)
+    monkeypatch.setattr(src.crunch, "_ctx", _gui_optimizer_context())
     startpath = os.path.join("testfiles", "robot.png")
     testpath = os.path.join("testfiles", "robot-crunch.png")
     # cleanup any existing files from previous tests
@@ -254,7 +284,7 @@ def test_crunch_function_optimize_png_unoptimized_file(monkeypatch):
 
 
 def test_crunch_function_optimize_png_preoptimized_file(monkeypatch):
-    monkeypatch.setattr(src.crunch, "GUI_MODE", True)
+    monkeypatch.setattr(src.crunch, "_ctx", _gui_optimizer_context())
     startpath = os.path.join("testfiles", "cat-cr.png") # test a file that has previously been optimized
     testpath = os.path.join("testfiles", "cat-cr-crunch.png")
     # cleanup any existing files from previous tests
@@ -277,6 +307,40 @@ def test_crunch_function_optimize_png_bad_filetype(capsys):
 
     out, err = capsys.readouterr()
     assert "[ ! ]" in err
+
+
+def test_parse_run_request_builds_cli_request():
+    request = src.crunch._parse_run_request(
+        ["-o", "out.png", os.path.join("testfiles", "robot.png")]
+    )
+    assert request.mode == src.crunch.ExecutionMode.CLI
+    assert len(request.png_paths) == 1
+    assert request.output_paths[request.png_paths[0]] == "out.png"
+
+
+def test_pngoptimizer_ignores_pngquant_skip_codes(monkeypatch, tmp_path):
+    """pngquant exit codes 98/99 should fall through to zopflipng."""
+    source = os.path.join("testfiles", "robot.png")
+    target = tmp_path / "robot.png"
+    shutil.copy(source, target)
+    crunch_path = tmp_path / "robot-crunch.png"
+
+    stages = []
+
+    def fake_subprocess(command):
+        stages.append(command)
+        if "pngquant" in command:
+            raise CalledProcessError(98, command)
+        crunch_path.write_bytes(target.read_bytes())
+
+    monkeypatch.setattr(src.crunch, "_ctx", _gui_optimizer_context())
+    optimizer = src.crunch.PngOptimizer(subprocess_runner=fake_subprocess)
+    optimizer.optimize(str(target))
+
+    assert len(stages) == 2
+    assert "pngquant" in stages[0]
+    assert "zopflipng" in stages[1]
+    assert crunch_path.exists()
 
 
 # main function
@@ -344,7 +408,7 @@ def test_crunch_function_main_multi_file():
         assert exit_info.value.code == 0
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS platform")
-def test_crunch_function_main_single_file_with_gui_flag():
+def test_crunch_function_main_single_file_with_gui_flag(cli_dependencies_for_gui_service):
     setup_logging_path()
 
     with pytest.raises(SystemExit) as exit_info:
@@ -367,7 +431,7 @@ def test_crunch_function_main_single_file_with_gui_flag():
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS platform")
-def test_crunch_function_main_single_file_with_spaces_with_gui_flag():
+def test_crunch_function_main_single_file_with_spaces_with_gui_flag(cli_dependencies_for_gui_service):
     setup_logging_path()
 
     with pytest.raises(SystemExit) as exit_info:
@@ -390,7 +454,7 @@ def test_crunch_function_main_single_file_with_spaces_with_gui_flag():
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS platform")
-def test_crunch_function_main_single_file_with_service_flag():
+def test_crunch_function_main_single_file_with_service_flag(cli_dependencies_for_gui_service):
     setup_logging_path()
 
     with pytest.raises(SystemExit) as exit_info:
@@ -413,7 +477,7 @@ def test_crunch_function_main_single_file_with_service_flag():
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS platform")
-def test_crunch_function_main_single_file_with_spaces_with_service_flag():
+def test_crunch_function_main_single_file_with_spaces_with_service_flag(cli_dependencies_for_gui_service):
     setup_logging_path()
 
     with pytest.raises(SystemExit) as exit_info:
@@ -436,7 +500,7 @@ def test_crunch_function_main_single_file_with_spaces_with_service_flag():
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS platform")
-def test_crunch_function_main_multi_file_with_gui_flag():
+def test_crunch_function_main_multi_file_with_gui_flag(cli_dependencies_for_gui_service):
     setup_logging_path()
 
     with pytest.raises(SystemExit) as exit_info:
@@ -468,7 +532,7 @@ def test_crunch_function_main_multi_file_with_gui_flag():
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS platform")
-def test_crunch_function_main_multi_file_with_service_flag():
+def test_crunch_function_main_multi_file_with_service_flag(cli_dependencies_for_gui_service):
     setup_logging_path()
 
     with pytest.raises(SystemExit) as exit_info:
@@ -533,7 +597,7 @@ def test_crunch_log_info():
     teardown_logging_path()
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS platform")
-def test_crunch_log_from_main_with_service():
+def test_crunch_log_from_main_with_service(cli_dependencies_for_gui_service):
     teardown_logging_path()
 
     with pytest.raises(SystemExit) as exit_info:
